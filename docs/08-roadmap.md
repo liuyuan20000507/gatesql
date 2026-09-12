@@ -11,25 +11,24 @@
 
 现代项目不需要手工造轮子，下面每条命令都是官方脚手架。
 
-### 0.1 生成 Next.js 项目骨架
+### 0.1 生成 Next.js 项目骨架 ✅ 已完成（2026-09-12）
+
+**注意：`create-next-app` 拒绝在非空目录生成项目**（`CLAUDE.md`、`data/`、`scripts/` 等都不在它的白名单里，会直接报「contains files that could conflict」退出）。所以正确顺序是：把现有文件挪出去 → 生成 → 挪回来：
 
 ```bash
-cd D:\code\text2sql-agent\frontend
+# 1. 暂存现有文件（.git 留在原地）
+mkdir D:\code\caliber_stash; cd D:\code\text2sql-agent
+Get-ChildItem -Force | Where-Object { $_.Name -ne ".git" } | Move-Item -Destination D:\code\caliber_stash
+
+# 2. 生成脚手架（--yes 跳过全部交互提问）
+pnpm create next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --use-pnpm --yes
+
+# 3. 挪回来，手工合并三个撞名文件：.gitignore（合并两边）、CLAUDE.md / README.md（保留自己的）
 ```
 
-先别急 —— 本项目是**单一 Next.js 应用**，不再分 frontend / backend。所以：
+生成的是 **Next.js 16**（Turbopack 已是 dev/build 默认，无需任何标记）。脚手架还会生成 `AGENTS.md`（Next 16 的版本警告，要求写代码前查 `node_modules/next/dist/docs/`）—— 保留它，项目的 `CLAUDE.md` 末尾用 `@AGENTS.md` 引用了它。
 
-```bash
-cd D:\code\text2sql-agent; rmdir frontend, backend
-```
-
-```bash
-pnpm create next-app@latest . --typescript --tailwind --app --eslint --src-dir --import-alias "@/*" --no-turbopack
-```
-
-这一条生成：`src/app/` 目录结构、TypeScript 配置、Tailwind、ESLint、`package.json` 的构建脚本。以前手配一天的东西。
-
-- [ ] **完成标准**：`pnpm dev` 能启动，浏览器打开 `localhost:3000` 看到 Next.js 默认页
+- [x] **完成标准**：`package.json`、`src/app/page.tsx` 等关键文件存在，`pnpm build` 通过
 
 ### 0.2 初始化 UI 组件库
 

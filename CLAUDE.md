@@ -6,7 +6,7 @@
 
 **Caliber** —— 一个会对错口径说「不」的中文取数 agent。用户用自然语言问数，它生成并只读执行 SQL，并在数字交付之前，用代码强制的口径规则和结果体检拦下「SQL 跑通了、图也画了、但数字是错的」那一整类错误。
 
-技术栈是**纯 Next.js 15 全栈**（App Router + Route Handler 手写 SSE + Server Actions），单容器、双 SQLite。**没有 Python 后端，没有 FastAPI** —— 早期文档里的 FastAPI 方案已作废。
+技术栈是**纯 Next.js 16 全栈**（App Router + Route Handler 手写 SSE + Server Actions），单容器、双 SQLite。**没有 Python 后端，没有 FastAPI** —— 早期文档里的 FastAPI 方案已作废。
 
 这是一个**学习项目**，作者的目标是掌握 agent 开发和全栈开发能力，并把它作为求职作品。因此**代码是否由作者本人理解，比代码写得多快更重要。**
 
@@ -64,6 +64,13 @@ AI 在这两个文件上可以做的事：**审查、指出漏洞、解释某个
 2. **不引入向量检索** —— 它会让同一道评测题两次跑出不同上下文，摧毁评测可复现性
 3. **不引入任何 agent 框架** —— 一行 import 换掉整个项目的核心价值
 
+## Next.js 16 注意事项
+
+- 项目用的是 **Next.js 16**，与本文件和 docs 里所有描述一致；不要按 Next 14/15 的旧习惯写代码
+- `middleware.ts` 已更名为 **`proxy.ts`**（旧的 middleware 约定已废弃）
+- Turbopack 是 dev 和 build 的默认打包器，不需要也不应再加 `--turbopack` 标记
+- 写代码前如对某个 API 的现状拿不准，先查 `node_modules/next/dist/docs/` 里随包发布的文档（这是 AGENTS.md 的要求）
+
 ## 常用命令
 
 ```bash
@@ -96,3 +103,5 @@ D:\anaconda\anaconda3.12\python.exe scripts\seed_db.py
 - 如果作者的要求和 `docs/` 冲突，**先提出来问**，不要默默按新要求做
 - 作者是新手，遇到他可能不懂的概念主动解释一句，但不要长篇大论
 - 作者让你干活时会引用具体文档（「按 `docs/03-api-contract.md` 实现桩接口」）—— 请严格照着那份文档做
+
+@AGENTS.md

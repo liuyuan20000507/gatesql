@@ -11,13 +11,14 @@ Caliber 是一个**纯 Next.js 全栈单体**，单容器、双 SQLite 文件。
              │  提问（fetch + ReadableStream）│  CRUD（Server Actions）
              ▼                              ▼
 ┌────────────────────────────────────────────────────────────┐
-│                  Next.js 15 (App Router) · 单进程            │
+│                  Next.js 16 (App Router) · 单进程            │
 │                                                             │
 │  app/page.tsx ········· RSC 外壳 + Client 对话组件           │
 │  app/runs/[id]/ ······· RSC 服务端折叠历史事件渲染            │
 │  app/api/chat/route.ts  Route Handler → ReadableStream(SSE)  │
 │  app/actions/ ········· Server Actions（报表 / 纠正样本 CRUD）│
-│  middleware.ts ········ JWT 校验 + IP 限流                    │
+│  proxy.ts ············· JWT 校验 + IP 限流（Next 16 中        │
+│                         由 middleware.ts 更名而来）           │
 │                            │                                │
 │                            ▼                                │
 │  ┌──────────────── lib/agent/loop.ts ────────────────┐      │
@@ -57,7 +58,7 @@ Next.js 全栈最容易犯的错是「什么都塞进 Server Action」或「什�
 | 报表 / 纠正样本的增删改 | **Server Actions** | 短事务、需要 `revalidatePath`、天然带 CSRF 防护。这条边界本身就是面试可讲的判断 |
 | 历史 run 详情页 | **RSC** | 服务端用 `reduceEvents` 折叠落库事件直接渲染，分享出去无需 JS 即可阅读 |
 | 实时对话区 | **Client Component** | `useReducer` 消费增量事件，用的是**同一个** `reduceEvents` |
-| 鉴权与限流 | **middleware.ts** | 在所有路由之前统一拦截 |
+| 鉴权与限流 | **proxy.ts**（Next 16 中由 middleware.ts 更名） | 在所有路由之前统一拦截 |
 
 ### `reduceEvents` 为什么是纯函数
 
@@ -114,7 +115,7 @@ Next.js 全栈最容易犯的错是「什么都塞进 Server Action」或「什�
 
 | 层 | 选择 | 理由 |
 |---|---|---|
-| 框架 | Next.js 15（App Router） | 作者指定全栈单框架；RSC + Route Handler 覆盖全部需求 |
+| 框架 | Next.js 16（App Router） | 作者指定全栈单框架；RSC + Route Handler 覆盖全部需求 |
 | 语言 | TypeScript 严格模式 | 端到端类型安全，SSE 事件协议靠类型系统守住 |
 | 样式 | Tailwind + shadcn/ui | 组件源码复制进项目，可控；默认外观即可，UI 设硬时间盒 |
 | 图表 | ECharts（`echarts/core` 按需引入 + `dynamic(..., {ssr:false})`） | 中文文档全；按需引入控制包体积 |

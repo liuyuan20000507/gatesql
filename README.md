@@ -4,7 +4,7 @@
 
 用自然语言问数，Caliber 生成并只读执行 SQL —— 并在数字交付给你之前，用**代码强制的口径规则**和**结果体检**拦下「SQL 跑通了、图也画了、但数字是错的」那一整类错误。
 
-**🚧 文档已定稿，开发未开始。当前进度见 [开发路线图](docs/08-roadmap.md)。**
+**🚧 开发刚开始：脚手架已就位，业务代码未动。当前进度见 [开发路线图](docs/08-roadmap.md)。**
 
 ---
 
@@ -35,13 +35,13 @@ Caliber 把全部工程量押在一件事上：**一个看起来对的数字，�
 
 ## 技术栈
 
-纯 Next.js 15 全栈单体，单容器，无外部依赖服务。
+纯 Next.js 16 全栈单体，单容器，无外部依赖服务。
 
 | 层 | 选择 |
 |---|---|
-| 框架 | Next.js 15（App Router）+ TypeScript 严格模式 |
+| 框架 | Next.js 16（App Router）+ TypeScript 严格模式 |
 | 流式 | Route Handler 返回 `ReadableStream`，手写 SSE |
-| UI | Tailwind + shadcn/ui + ECharts |
+| UI | Tailwind 4 + shadcn/ui + ECharts |
 | 校验 | Zod（SSE 协议 / LLM 输出 / ChartSpec 三处共用） |
 | 数据库 | `node:sqlite`（Node 24 内置，零编译，**有 `setAuthorizer`**） |
 | SQL 解析 | `node-sql-parser` |
@@ -56,7 +56,7 @@ Caliber 把全部工程量押在一件事上：**一个看起来对的数字，�
 docker compose up
 ```
 
-**不需要配置任何 API key** —— 未提供 key 时自动进入 cassette 回放模式，用预录的模型响应走完整个产品流程，包括重试自愈的全过程。
+**不需要配置任何 API key** —— 未提供 key 时自动进入 cassette 回放模式，用预录的模型响应走完整个产品流程，包括重试自愈的全过程。（Docker 配置在第 6 周才有）
 
 本地开发：
 
