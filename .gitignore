@@ -30,3 +30,6 @@ Thumbs.db
 # 日志
 *.log
 logs/
+
+# AI agent 在排查时留下的临时探查脚本
+scripts/_tmp_*
