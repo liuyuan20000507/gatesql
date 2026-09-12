@@ -1,130 +1,235 @@
-# 技术方案
+# 架构设计
 
-## 整体架构
+## 一、整体架构
+
+Caliber 是一个**纯 Next.js 全栈单体**，单容器、双 SQLite 文件。没有独立后端进程、没有消息队列、没有外部依赖服务。
 
 ```
-浏览器
-  │  提问
-  ▼
-Next.js 前端 (localhost:3000)
-  │  POST /api/chat  →  SSE 流式返回
-  ▼
-FastAPI 后端 (localhost:8000)
-  │
-  ├─ Agent 循环 ──→ 大模型 API (火山方舟 / DeepSeek)
-  │      │
-  │      └─ 工具: run_sql / get_schema
-  │
-  └─ SQLite 数据库 (data/shop.db, 只读连接)
+                         浏览器
+                            │
+             ┌──────────────┴───────────────┐
+             │  提问（fetch + ReadableStream）│  CRUD（Server Actions）
+             ▼                              ▼
+┌────────────────────────────────────────────────────────────┐
+│                  Next.js 15 (App Router) · 单进程            │
+│                                                             │
+│  app/page.tsx ········· RSC 外壳 + Client 对话组件           │
+│  app/runs/[id]/ ······· RSC 服务端折叠历史事件渲染            │
+│  app/api/chat/route.ts  Route Handler → ReadableStream(SSE)  │
+│  app/actions/ ········· Server Actions（报表 / 纠正样本 CRUD）│
+│  middleware.ts ········ JWT 校验 + IP 限流                    │
+│                            │                                │
+│                            ▼                                │
+│  ┌──────────────── lib/agent/loop.ts ────────────────┐      │
+│  │  六步主循环 · 多维预算 · 指纹环路检测 · 失败六分类   │ ★手写 │
+│  └───┬─────────┬──────────┬──────────┬───────────────┘      │
+│      │         │          │          │                      │
+│      ▼         ▼          ▼          ▼                      │
+│  时间归一   上下文装配   LLM 调用   SQL 执行链               │
+│  date-fns   schema切片   openai     ┌──────────────────┐    │
+│                         SDK        │ guard.ts    ★手写 │    │
+│                          │         │ lint.ts（口径）   │    │
+│                          │         │ explain.ts（EQP） │    │
+│                          │         │ worker 池执行     │    │
+│                          │         └──────────────────┘    │
+└──────────────────────────┼──────────────────┼──────────────┘
+                           │                  │
+                           ▼                  ▼
+                  ┌────────────────┐   ┌──────────────┐
+                  │ 火山方舟/DeepSeek│   │ shop.db      │ 只读
+                  │ (cassette 可拦截)│   │ 被分析的业务库 │
+                  └────────────────┘   └──────────────┘
+                                       ┌──────────────┐
+                                       │ app.db       │ 读写
+                                       │ trace/报表   │ 物理隔离
+                                       └──────────────┘
 ```
 
-## 技术选型和理由
+★ 标记的两个文件**必须由作者本人手写**，见 [CLAUDE.md](../CLAUDE.md)。
 
-| 层 | 选择 | 为什么选它 |
+## 二、为什么这样分层
+
+Next.js 全栈最容易犯的错是「什么都塞进 Server Action」或「什么都走 Route Handler」。本项目的分界线是明确的：
+
+| 场景 | 用什么 | 为什么 |
 |---|---|---|
-| 前端框架 | Next.js 15 + TypeScript | 招聘要求里出现频率最高；自带路由和构建，不用自己配 |
-| 样式 | Tailwind CSS + shadcn/ui | 不用手写 CSS，组件直接复制到项目里，可控 |
-| 图表 | ECharts | 中文文档全，图表类型多，国内公司用得多 |
-| 后端框架 | FastAPI | 原生支持异步和 SSE；自动生成接口文档；Python 是 agent 生态主场 |
-| 数据校验 | Pydantic v2 | 已装；用它定义所有接口的输入输出，类型错误在运行前就暴露 |
-| 数据库访问 | SQLAlchemy 2.0 | 已装；用它管理只读连接和超时 |
-| 数据库 | SQLite（后期可换 PostgreSQL） | 零配置，一个文件，方便别人克隆项目直接跑 |
-| 大模型 | 火山方舟或 DeepSeek 的 OpenAI 兼容接口 | 便宜，国内直连不用梯子 |
-| 部署 | Docker Compose | 面试官一条命令就能在自己机器上跑起来 |
+| 问答（长时流式） | **Route Handler** 返回 `ReadableStream` | Server Actions 不支持流式增量返回。手写 SSE 才能推送 agent 的多步过程 |
+| 报表 / 纠正样本的增删改 | **Server Actions** | 短事务、需要 `revalidatePath`、天然带 CSRF 防护。这条边界本身就是面试可讲的判断 |
+| 历史 run 详情页 | **RSC** | 服务端用 `reduceEvents` 折叠落库事件直接渲染，分享出去无需 JS 即可阅读 |
+| 实时对话区 | **Client Component** | `useReducer` 消费增量事件，用的是**同一个** `reduceEvents` |
+| 鉴权与限流 | **middleware.ts** | 在所有路由之前统一拦截 |
 
-## 目录结构
+### `reduceEvents` 为什么是纯函数
+
+```
+事件数组 ──► reduceEvents(events) ──► RunState
+   ▲                                     │
+   │                                     ├─► 服务端：RSC 渲染 /runs/[id]
+   │                                     └─► 客户端：useReducer 实时折叠
+   └── 也可以喂假事件数组直接单测
+```
+
+这一步提纯几乎零成本，换来三件事：**从架构上消灭「刷新后看到的和实时看到的不一致」这类 bug**；得到一个能喂假事件数组直接单测的纯逻辑点（流式 UI 极少见的可测点）；第 1 周做「假的但完整的网站」时，它是唯一能先写完的测试。
+
+## 三、一次请求的完整数据流
+
+```
+用户敲回车
+  │
+  ├─ 客户端 fetch POST /api/chat，AbortController 挂上
+  │  （不用 EventSource —— 它只能 GET 且不能带自定义头）
+  │
+  ├─ middleware：校验 JWT cookie → IP 滑动窗口限流 → 放行
+  │
+  ├─ Route Handler 建 ReadableStream，立刻推 run_started
+  │
+  ├─ [不调 LLM] 时间归一：AS_OF_DATE=2026-08-31，"近30天" → 2026-08-02~08-31
+  │                        推 time_resolved 回显给用户
+  │
+  ├─ [不调 LLM] 上下文装配：确定性 schema 裁剪 + 枚举值注入 + few-shot 打分
+  │                        全文存入 step 表，推 context_built（只推表名）
+  │
+  ├─ [LLM #1] 生成 SQL → Zod 校验 → 推 sql_generated(attempt=N)
+  │
+  ├─ guard 安全检查（fail-closed）── 拒绝则终止，不重试
+  │
+  ├─ 口径 lint（fail-open）── block 违规则带缺失谓词回到生成步
+  │
+  ├─ EQP 代价预检（~1ms）── 缺失 JOIN 条件则拒绝并回到生成步
+  │
+  ├─ worker 池只读执行（主线程 5s 计时）→ 推 rows
+  │
+  ├─ [不调 LLM] 结果体检：空结果归因 / 形态可疑 / 数据水位 / 量级校验
+  │
+  ├─ [不调 LLM] 三态判定 + 口径回执卡片（AST 机械生成，模型碰不到）
+  │
+  ├─ [LLM #2] ChartSpec + 结论文字（结论禁止出现数字断言）
+  │
+  └─ 批量 flush step 到 app.db，推 done（任何分支下都必发）
+```
+
+**关键设计**：11 个步骤里只有 2 步调 LLM。时间解析、schema 装配、回执生成、结果体检全部是确定性代码 —— 这既是准确率的来源，也是评测可复现的前提。
+
+## 四、技术选型
+
+| 层 | 选择 | 理由 |
+|---|---|---|
+| 框架 | Next.js 15（App Router） | 作者指定全栈单框架；RSC + Route Handler 覆盖全部需求 |
+| 语言 | TypeScript 严格模式 | 端到端类型安全，SSE 事件协议靠类型系统守住 |
+| 样式 | Tailwind + shadcn/ui | 组件源码复制进项目，可控；默认外观即可，UI 设硬时间盒 |
+| 图表 | ECharts（`echarts/core` 按需引入 + `dynamic(..., {ssr:false})`） | 中文文档全；按需引入控制包体积 |
+| 校验 | Zod | SSE 事件协议、LLM 结构化输出、ChartSpec 三处共用 |
+| 数据库驱动 | **`node:sqlite`（Node 24 内置）** | 零编译（避开 Windows + Docker 的 node-gyp 双重雷区）；**有 `setAuthorizer`**，这是安全叙事的核心 |
+| SQL 解析 | `node-sql-parser` | AST 白名单、谓词到达性检查、指纹规范化、下钻改写四处共用 |
+| 时间处理 | `date-fns` | 相对时间的确定性解析 |
+| 模型调用 | 官方 `openai` SDK 指向兼容 baseURL | 火山方舟 / DeepSeek 都兼容 OpenAI 协议 |
+| 鉴权 | `jose` 签 JWT + httpOnly cookie | 十几行代码解决真实目标（别让 key 被刷爆） |
+| 测试 | Vitest | 只押在「写错了会静默产生错误结论」的地方 |
+| 部署 | Docker 单容器（`output:'standalone'`） | 一条命令跑起来直接决定项目是否被看完 |
+
+### 三条被实测证伪的备选方案
+
+这些不是读来的知识，是在这台机器上动手试出来的，构成 ADR 的核心内容：
+
+1. **`prepare()` 对多语句静默截断** —— `prepare('SELECT 1 AS a; DROP TABLE orders').all()` 不报错，静默只执行第一句返回 `[{a:1}]`。驱动给的是虚假的安全感。所以代码路径上绝不能出现 `exec()`，那是唯一的真实多语句入口。
+2. **`worker.terminate()` 回收不了卡死的 worker** —— 对卡在同步原生调用里的 worker 永不 resolve（15 秒无反应，连 `process.exit(0)` 都退不出，容器里必须靠 SIGKILL 兜底）。但主线程全程健康。结论：worker 隔离保的只是服务可用性，真正解决超时的是把防线前移到 1ms 的 EQP 预检。
+3. **EQP 输出可判定但必须结合行数** —— 三表笛卡尔积返回三行全 `SCAN`，正常三表 JOIN 是 1 SCAN + 2 SEARCH；但 `products` 只有 30 行，对它全表扫描完全合法，「见 SCAN 就拒」会大量误杀。
+
+## 五、目录结构
 
 ```
 text2sql-agent/
-├── CLAUDE.md               # 给 AI 看的项目约定
-├── README.md               # 给人看的项目说明
-├── docker-compose.yml      # 第 5 周才写
-├── docs/
-│   ├── 01-requirements.md  # 需求文档
-│   ├── 02-architecture.md  # 本文件
-│   ├── 03-api-contract.md  # 接口约定
-│   ├── 04-roadmap.md       # 开发路线图
-│   └── eval-log.md         # 评测记录（第 4 周开始写）
+├── CLAUDE.md                    项目约定（AI 每次自动读）
+├── README.md
+├── docker-compose.yml           第 6 周
+├── Dockerfile                   多阶段，output:'standalone'
+├── .gitattributes               * text=auto eol=lf（CRLF 进容器会让 entrypoint 报 exec format error）
+│
+├── docs/                        本文档集
+│   ├── 00-product.md ~ 10-engineering.md
+│   ├── adr/NNN-*.md             架构决策记录（作者本人写）
+│   ├── eval-log.md              每轮优化的 before/after
+│   └── evalset/questions.md     30 题题面（第 1 周冻结并打 tag）
+│
 ├── data/
-│   ├── shop.db             # 示例数据库（运行 scripts/seed_db.py 生成）
-│   └── evalset.jsonl       # 测试集（第 4 周建）
+│   ├── shop.db                  被分析的业务库（只读）
+│   └── app.db                   应用自身的库（trace/报表/纠正样本）
+│
+├── fixtures/
+│   ├── llm/*.json               cassette 录制的 LLM 响应
+│   └── evalset/gold.jsonl       30 题的 gold SQL + 结果
+│
 ├── scripts/
-│   └── seed_db.py          # 生成示例数据库
-├── backend/
-│   ├── requirements.txt
-│   ├── main.py             # FastAPI 入口，只放路由
-│   ├── config.py           # 读环境变量
-│   ├── schemas.py          # Pydantic 模型（接口的输入输出）
-│   ├── agent/
-│   │   ├── loop.py         # ★ agent 主循环，项目核心
-│   │   ├── prompts.py      # 提示词，单独放方便调
-│   │   └── llm.py          # 大模型调用封装
-│   └── db/
-│       ├── engine.py       # 只读连接
-│       ├── schema_info.py  # 提取表结构给模型看
-│       └── guard.py        # ★ SQL 安全检查
-└── frontend/
-    ├── package.json
-    └── src/
-        ├── app/page.tsx        # 主页面
-        ├── components/         # 对话框、SQL 展示、表格、图表
-        └── lib/sse.ts          # SSE 客户端封装
+│   ├── seed_db.py               生成 shop.db（后续可改写为 TS）
+│   └── eval.ts                  评测脚本
+│
+├── src/
+│   ├── app/
+│   │   ├── page.tsx             主页（RSC 外壳）
+│   │   ├── runs/page.tsx        历史列表
+│   │   ├── runs/[id]/page.tsx   trace 详情（RSC 用 reduceEvents 渲染）
+│   │   ├── login/page.tsx
+│   │   ├── actions/             Server Actions（报表、纠正样本）
+│   │   └── api/
+│   │       ├── chat/route.ts    ★ SSE 主接口
+│   │       ├── schema/route.ts
+│   │       └── health/route.ts
+│   │
+│   ├── components/              一个组件一个文件
+│   │   ├── chat/                输入框、消息流、状态条
+│   │   ├── result/              SQL 展示、表格、图表、回执卡片
+│   │   └── schema-sidebar/
+│   │
+│   ├── lib/
+│   │   ├── events.ts            ★ SSE 事件协议（Zod discriminated union，唯一契约）
+│   │   ├── reduce-events.ts     ★ 纯函数，前后端共用
+│   │   ├── agent/
+│   │   │   ├── loop.ts          ★★ 主循环（作者手写）
+│   │   │   ├── prompts.ts       提示词
+│   │   │   ├── llm.ts           模型调用 + cassette 拦截
+│   │   │   ├── schema-context.ts 确定性裁剪 + 枚举值注入
+│   │   │   ├── time.ts          AS_OF_DATE + 相对时间解析
+│   │   │   ├── fewshot.ts       确定性打分检索
+│   │   │   ├── budget.ts        多维预算
+│   │   │   └── fingerprint.ts   AST 规范化指纹（环路检测）
+│   │   ├── sql/
+│   │   │   ├── guard.ts         ★★ 安全检查（作者手写，fail-closed）
+│   │   │   ├── lint.ts          口径规则引擎（fail-open）
+│   │   │   ├── rules.ts         8 条口径规则的数据结构声明
+│   │   │   ├── explain.ts       EQP 代价预检
+│   │   │   ├── receipt.ts       口径回执卡片生成（模型碰不到）
+│   │   │   ├── executor.ts      worker 池管理
+│   │   │   └── worker.ts        worker 线程入口
+│   │   ├── db/
+│   │   │   ├── shop.ts          只读连接 + setAuthorizer
+│   │   │   └── app.ts           应用库连接
+│   │   └── verify/
+│   │       ├── probe.ts         空结果归因探针
+│   │       └── checks.ts        结果体检四项
+│   │
+│   └── types/
+│
+└── tests/
+    ├── security/                ≥30 条攻击语料
+    ├── rules/                   每条口径规则的正反 fixture
+    ├── compare/                 结果等价比对器的单测
+    └── reduce-events.test.ts
 ```
 
-标★的两个文件是**必须你自己动手写**的，理由见 CLAUDE.md。
+★ = 关键契约文件，★★ = **必须作者手写**。
 
-## Agent 循环的设计
+## 六、架构上的三条硬约束
 
-这是整个项目的核心，先想清楚再写代码。
+1. **两个 SQLite 文件物理隔离。** agent 持有的只读连接 + `setAuthorizer` 表白名单使它根本看不到 `app.db`。这意味着 agent 不可能通过 SQL 篡改自己的 trace 或读到报表数据 —— 这类问题是任何 SQL 层校验都覆盖不到的。
 
-```
-收到问题
-  │
-  ├─ 1. 取数据库表结构（只取相关的表，不要把几十张表全塞给模型）
-  │
-  ├─ 2. 调模型：给它问题 + 表结构，要求输出 SQL
-  │
-  ├─ 3. 安全检查：是不是只读语句？有没有危险关键字？
-  │      └─ 不通过 → 直接拒绝，不进数据库
-  │
-  ├─ 4. 执行 SQL（带超时，限制返回行数）
-  │      ├─ 成功 → 进第 5 步
-  │      └─ 报错 → 把「原 SQL + 错误信息」交给模型改，回到第 3 步
-  │                 最多重试 3 次，超了就告诉用户失败
-  │
-  ├─ 5. 调模型：根据数据写一段结论，并选一种图表类型
-  │
-  └─ 6. 返回结果
-```
+2. **失败策略刻意不对称。** 安全检查 fail-closed（AST 解析失败即拒绝），口径 lint fail-open（解析失败放过并记 warn）。同一个解析器、两条相反的失败策略，理由是安全上「拒绝」是安全侧、可用性上「放过」是安全侧。这是设计决策而非疏漏，要写进 ADR。
 
-**三个必须想清楚的问题**（面试一定会问）：
+3. **schema 上下文必须是确定性产物。** 同一个问题任何时候生成完全相同的上下文。这是拒绝向量检索的真实理由 —— 一旦裁剪带随机性，同一道评测题两次跑出不同上下文，准确率变化再也无法归因。
 
-1. **怎么防死循环？** 硬性重试上限 3 次，且每次重试要带上之前所有失败记录，否则模型会反复犯同一个错。
-2. **表结构怎么塞给模型？** 表少时全给；表多时先让模型判断需要哪几张表，再只给那几张的结构。这叫 schema 裁剪，是准确率提升的关键手段之一。
-3. **返回多少行数据给模型总结？** 不能全给，几万行会撑爆上下文也很贵。策略是最多给前 50 行，并告诉模型总行数。
+## 七、环境变量
 
-## 安全边界
+见 [工程规范](10-engineering.md#环境变量) 的完整清单。
 
-Agent 能执行 SQL，等于把数据库交给了一个不完全可控的东西，必须多层防护：
+---
 
-1. **数据库连接层面只读** —— SQLite 用 `file:...?mode=ro` 只读模式打开，从根上写不了
-2. **语句白名单** —— 只允许 `SELECT` 和 `WITH` 开头的语句
-3. **关键字黑名单** —— 出现 `INSERT` `UPDATE` `DELETE` `DROP` `ALTER` `ATTACH` `PRAGMA` 一律拒绝
-4. **禁止多语句** —— 检查分号，防止 `SELECT 1; DROP TABLE orders`
-5. **超时和行数上限** —— 查询超过 5 秒中断，最多返回 1000 行
-
-这五层要都做，因为任何单独一层都可能被绕过。这部分写完记得自己想办法攻击一下试试。
-
-## 环境变量
-
-后端根目录放 `.env`（这个文件**不要提交到 git**）：
-
-```
-LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-LLM_API_KEY=你的key
-LLM_MODEL=模型名
-DB_PATH=../data/shop.db
-MAX_RETRY=3
-MAX_ROWS=1000
-QUERY_TIMEOUT=5
-```
+相关文档：[接口约定](03-api-contract.md) · [数据模型](04-data-model.md) · [Agent 设计](05-agent-design.md) · [技术决策记录](09-decisions.md)

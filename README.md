@@ -1,77 +1,96 @@
-# Text-to-SQL 数据分析网站
+# Caliber
 
-用自然语言提问，自动生成 SQL 并返回表格、图表和结论。
+> 一个会对错口径说「不」的中文取数 agent。
 
-> 开发中。当前进度见 [docs/04-roadmap.md](docs/04-roadmap.md)。
+用自然语言问数，Caliber 生成并只读执行 SQL —— 并在数字交付给你之前，用**代码强制的口径规则**和**结果体检**拦下「SQL 跑通了、图也画了、但数字是错的」那一整类错误。
 
-## 这个项目解决什么问题
+**🚧 文档已定稿，开发未开始。当前进度见 [开发路线图](docs/08-roadmap.md)。**
 
-业务人员想看数据但不会写 SQL，只能排队等数据分析师。这个项目把「问一句话」到「拿到答案」之间的人力环节自动化：
+---
 
-```
-用户: 上个月销售额最高的 5 个商品是什么？
-  ↓
-系统: [展示生成的 SQL] → [表格] → [柱状图] → 「上个月销售额最高的是无线耳机，
-      达到 12.9 万元，前五名合计占总销售额的 34%……」
-```
+## 为什么需要它
+
+不会写 SQL 不是真问题 —— 那件事 ChatGPT 就能做。Text-to-SQL 在真实业务里唯一的硬障碍是：**它错得很安静。**
+
+在本项目自带的示例库上，三个陷阱都是现成的：
+
+| 问题 | 错误写法得到 | 正确答案 | 偏差 |
+|---|---|---|---|
+| 总销售额（漏 `status='已完成'`） | 60,765,700.25 | 41,015,358.75 | 高估 48% |
+| 客单价（JOIN 扇出） | 2,698.56 | 5,057.38 | 低估 47% |
+| 销售额（用标准售价而非成交价） | 43,560,642.14 | 41,015,358.75 | **仅 6.2%** |
+
+第三行是这个产品存在的理由 —— **一个只偏 6.2% 的数字，没有任何业务人员能发现**，然后它进入周报、进入决策。
+
+Caliber 把全部工程量押在一件事上：**一个看起来对的数字，凭什么被相信。**
+
+## 核心能力
+
+- **口径规则引擎** —— 8 条业务口径以 SQL AST 谓词到达性检查在执行前强制生效。违规不是挂个警告，而是带着「缺失的具体谓词」回喂模型重新生成，实现对**业务错误**（而非仅语法错误）的自愈
+- **三态输出** —— 已核验 / 未核验（写明原因）/ 拒答（给澄清选项）。拒答基于四类确定性信号，与「模型说不知道」是两回事
+- **口径回执卡片** —— 由 AST 和规则表机械生成、**完全不经过模型**，因而结构上不可能撒谎
+- **可复现的评测** —— 30 题分层冻结集（写代码前定稿并打 tag），LLM 请求录制回放，CI 里掉点直接让 PR 变红
+- **SQL 安全九层纵深** —— 核心是 `setAuthorizer` 引擎级授权回调，拿到的是 SQLite 解析后的语义，注释拆词 / 大小写混写 / 全角字符 / CTE 藏写操作一概失效
+- **手写 agent 主循环** —— 多维预算 + AST 指纹环路检测 + 失败六分类，不用任何 agent 框架
 
 ## 技术栈
 
-- **前端** Next.js 15 + TypeScript + Tailwind + shadcn/ui + ECharts
-- **后端** FastAPI + Pydantic + SQLAlchemy
-- **数据库** SQLite（示例数据）
-- **模型** OpenAI 兼容接口（火山方舟 / DeepSeek）
-- **部署** Docker Compose
+纯 Next.js 15 全栈单体，单容器，无外部依赖服务。
 
-## 本地启动
+| 层 | 选择 |
+|---|---|
+| 框架 | Next.js 15（App Router）+ TypeScript 严格模式 |
+| 流式 | Route Handler 返回 `ReadableStream`，手写 SSE |
+| UI | Tailwind + shadcn/ui + ECharts |
+| 校验 | Zod（SSE 协议 / LLM 输出 / ChartSpec 三处共用） |
+| 数据库 | `node:sqlite`（Node 24 内置，零编译，**有 `setAuthorizer`**） |
+| SQL 解析 | `node-sql-parser` |
+| 模型 | OpenAI 兼容接口（火山方舟 / DeepSeek） |
+| 部署 | Docker 单容器（`output: 'standalone'`） |
 
-**1. 准备数据库**
+选型理由和被否决的备选见 [技术决策记录](docs/09-decisions.md)。
+
+## 快速开始
 
 ```bash
-python scripts/seed_db.py
+docker compose up
 ```
 
-**2. 启动后端**
+**不需要配置任何 API key** —— 未提供 key 时自动进入 cassette 回放模式，用预录的模型响应走完整个产品流程，包括重试自愈的全过程。
+
+本地开发：
 
 ```bash
-cd backend
-pip install -r requirements.txt
-copy .env.example .env
-# 编辑 .env 填入你的模型 API key
-uvicorn main:app --reload --port 8000
-```
-
-**3. 启动前端**
-
-```bash
-cd frontend
 pnpm install
+python scripts/seed_db.py        # 生成示例数据库
+cp .env.example .env.local       # 填入模型 key（可选）
 pnpm dev
 ```
-
-打开 http://localhost:3000
 
 ## 项目文档
 
 | 文档 | 内容 |
 |---|---|
-| [需求文档](docs/01-requirements.md) | 做什么、验收标准、评测方式 |
-| [技术方案](docs/02-architecture.md) | 架构、选型理由、agent 循环设计、安全边界 |
-| [接口约定](docs/03-api-contract.md) | 前后端契约，SSE 事件格式 |
-| [开发路线图](docs/04-roadmap.md) | 分周任务和完成标准 |
-
-## 核心设计
-
-**Agent 循环**：取表结构 → 生成 SQL → 安全检查 → 执行 → 失败则带错误信息重试（上限 3 次）→ 总结成文字和图表建议
-
-**安全防护**（五层，防止 agent 破坏数据库）：
-
-1. 数据库以只读模式连接
-2. 只允许 SELECT / WITH 开头的语句
-3. 危险关键字黑名单
-4. 禁止多语句执行
-5. 查询超时和返回行数上限
+| [产品文档](docs/00-product.md) | 定位、目标用户、差异化、凭什么不是 demo |
+| [需求与验收](docs/01-requirements.md) | 能力清单、15 条用户故事、**明确不做的清单** |
+| [架构设计](docs/02-architecture.md) | 分层、数据流、目录结构 |
+| [接口约定](docs/03-api-contract.md) | SSE 事件协议（唯一契约） |
+| [数据模型](docs/04-data-model.md) | 两个 SQLite 库的表设计 |
+| [Agent 设计](docs/05-agent-design.md) | 循环、重试、上下文工程、可观测性 |
+| [评测体系](docs/06-evaluation.md) | 测试集、打分、指标、CI 门禁 |
+| [安全设计](docs/07-security.md) | 九层防护 + 攻击清单 |
+| [开发路线图](docs/08-roadmap.md) | 分周任务和完成标准 |
+| [技术决策记录](docs/09-decisions.md) | 每个选择的理由与代价 |
+| [工程规范](docs/10-engineering.md) | 编码规范、环境变量、环境坑 |
 
 ## 评测结果
 
-第 4 周补充。
+第 3 周补充基线，第 4 周补充优化曲线。
+
+## 明确不做
+
+这份清单和能力清单同等重要。完整版（36 条）见 [需求与验收](docs/01-requirements.md#五明确不做)，摘要：
+
+通用 BI · 连接用户自己的数据库 · 多轮追问与指代消解 · 向量检索 · 完整语义层（IR + SQL 编译器）· 任何 agent 框架 · 多 agent 编排 · 治理与协作层 · OpenTelemetry · Kubernetes · 移动端与深色模式
+
+每一条都有具体理由 —— 大部分是「工作量以周计而面试零加分」，少数是「它会摧毁评测体系」。
