@@ -30,54 +30,53 @@ pnpm create next-app@latest . --typescript --tailwind --eslint --app --src-dir -
 
 - [x] **完成标准**：`package.json`、`src/app/page.tsx` 等关键文件存在，`pnpm build` 通过
 
-### 0.2 初始化 UI 组件库
+### 0.2 初始化 UI 组件库 ✅ 已完成（2026-09-12）
+
+注意：新版 shadcn 的 `init` 有交互式提问（选组件库和 preset），无法交互时要带全参数：
 
 ```bash
-pnpm dlx shadcn@latest init
+pnpm dlx shadcn@latest init -t next -b base --preset nova -y
 ```
 
 之后需要什么组件就 `pnpm dlx shadcn@latest add button table card badge` —— 它把**组件源码复制进你的项目**（不是装依赖），所以完全可控可改。
 
-- [ ] **完成标准**：`src/components/ui/` 下出现组件文件，`pnpm build` 不报错
+- [x] **完成标准**：`src/components/ui/` 下出现组件文件，`pnpm build` 不报错
 
-### 0.3 装其余依赖
+### 0.3 装其余依赖 ✅ 已完成（2026-09-12）
 
 ```bash
 pnpm add zod openai node-sql-parser date-fns jose echarts
-```
-
-```bash
 pnpm add -D vitest @vitest/ui tsx
 ```
 
-- [ ] **完成标准**：`pnpm list` 能看到全部依赖，无 peer 警告阻塞
+踩坑：vitest 5 要求 `@types/node >= 22`，脚手架默认装的是 20，需要 `pnpm add -D "@types/node@^24"`（顺便和 Node 24 对齐）。
 
-### 0.4 确认示例数据库
+- [x] **完成标准**：`pnpm list` 能看到全部依赖，peer 警告已清零
 
-```bash
-D:\anaconda\anaconda3.12\python.exe scripts\seed_db.py
-```
+### 0.4 确认示例数据库 ✅ 已完成（2026-09-11）
 
-- [ ] **完成标准**：`data/shop.db` 存在，脚本输出「有效销售额合计 41,015,358.75 元」
+- [x] **完成标准**：`data/shop.db` 存在（2 MB），锚点数字「有效销售额 41,015,358.75 元」已核对
 
-### 0.5 确认大模型能调通 ← 最关键的一步
+### 0.5 确认大模型能调通 ✅ 已完成（2026-09-12）
 
-写一个十来行的临时脚本，用 `openai` SDK 指向火山方舟或 DeepSeek 的 baseURL，让模型回答「你好」。
+用 `scripts/probe_llm.ts` 验证，模型回复「你好」成功。
 
-- [ ] **完成标准**：能打印出模型回复。**这一步不通就别往下做**，后面全部工作建立在它上面
+**关键发现：火山 Coding Plan 的 key 走的不是标准 chat.completions。** `/api/v3` 上调 `ark-code-latest` 返回 404，必须用 `/api/coding/v3` 的 **responses 接口**（openai SDK 的 `client.responses.create`）。这直接影响第 2 周 `src/lib/agent/llm.ts` 的实现方式，ADR 里要补一条。
 
-### 0.6 确认 `node:sqlite` 的关键能力
+- [x] **完成标准**：能打印出模型回复
 
-在 node REPL 里验证三件事（这些是架构决策的实测依据）：
+### 0.6 确认 `node:sqlite` 的关键能力 ✅ 已完成（2026-09-12）
 
-```js
-const { DatabaseSync } = require('node:sqlite')
-const db = new DatabaseSync('data/shop.db', { readOnly: true })
-typeof db.setAuthorizer   // 期望 'function'
-db.prepare("SELECT 1 AS a; DROP TABLE orders").all()  // 期望 [{a:1}]，静默截断
-```
+用 `scripts/probe_sqlite.mjs` 在本机 Node v24.20 实测，四项全部符合预期：
 
-- [ ] **完成标准**：`setAuthorizer` 存在；多语句 prepare 返回 `[{a:1}]` 且不报错（亲眼看到「驱动给的是虚假安全感」）
+1. `typeof db.setAuthorizer === 'function'` ✓
+2. `prepare("SELECT 1 AS a; DROP TABLE orders").all()` 静默返回 `[{a:1}]`，不报错 ✓
+3. 只读连接执行 `DELETE` 抛 `attempt to write a readonly database` ✓
+4. EQP 可判定：笛卡尔积三行全是 `SCAN`；正常 JOIN 是 `SEARCH ... USING INTEGER PRIMARY KEY` ✓
+
+> 注意第 4 项的细节：危险的笛卡尔积也会显示 `SCAN orders USING COVERING INDEX ...` —— 带索引名的 SCAN 不代表安全，**判据是「全部 SCAN、没有任何 SEARCH」**，不是「出现了 SCAN 字样」。
+
+- [x] **完成标准**：三个关键行为 + EQP 判据全部亲眼验证
 
 ### 0.7 工程基线
 
