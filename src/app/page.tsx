@@ -1,69 +1,132 @@
-import Image from "next/image";
+"use client";
+
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+
+import { ChartPanel } from "@/components/chat/chart-panel";
+import { ReceiptCard } from "@/components/chat/receipt-card";
+import { ResultTable } from "@/components/chat/result-table";
+import { SqlAttemptsPanel } from "@/components/chat/sql-attempts-panel";
+import { StatusBar } from "@/components/chat/status-bar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import type { CaliberEvent } from "@/lib/events";
+import { emptyRunState, reduceEvent } from "@/lib/reduce-events";
+import { postChatStream } from "@/lib/sse-client";
 
 export default function Home() {
+  const [state, dispatchEvent] = useReducer(reduceEvent, undefined, emptyRunState);
+  const [input, setInput] = useState("");
+  const [streaming, setStreaming] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // 组件卸载时中止在途请求 —— StrictMode 下尤其必要
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const send = useCallback(async () => {
+    const question = input.trim();
+    if (!question || streaming) return;
+
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setStreaming(true);
+
+    try {
+      await postChatStream("/api/chat", { question, conversationId: null }, dispatchEvent, ac.signal);
+    } catch (err) {
+      if (!ac.signal.aborted) {
+        dispatchEvent({ type: "error", code: "LLM_ERROR", message: String(err) });
+      }
+    } finally {
+      setStreaming(false);
+    }
+  }, [input, streaming]);
+
+  const hasRun = state.runId !== null;
+  const inFlight = streaming && !state.finished;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="mx-auto min-h-dvh max-w-3xl px-4 py-8">
+      <header className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Caliber</h1>
+        <p className="text-sm text-neutral-500">会对错口径说「不」的取数 agent（第 1 周：界面为真，数据为剧本）</p>
+      </header>
+
+      <form
+        className="mb-6 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send();
+        }}
+      >
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="用中文问一个问题，例如：2026 年上半年各商品分类的销售额排名"
+          disabled={inFlight}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+        <Button type="submit" disabled={!input.trim() || inFlight}>
+          {inFlight ? "查询中…" : "发送"}
+        </Button>
+      </form>
+
+      {hasRun && (
+        <div className="space-y-4">
+          <StatusBar phase={state.phase} timeDisplay={state.timeDisplay} verdict={state.verdict} />
+
+          {state.attempts.length > 0 && <SqlAttemptsPanel attempts={state.attempts} />}
+
+          {state.error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <span className="font-medium">出错（{state.error.code}）：</span>
+              {state.error.message}
+            </div>
+          )}
+
+          {state.verdict === "refused" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+              <div className="mb-2"><Badge variant="destructive">已拒答</Badge></div>
+              <ul className="mb-2 list-disc pl-5 text-xs text-red-800">
+                {state.verdictReasons.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+              {state.clarifications.map((c) => (
+                <button
+                  key={c.label}
+                  type="button"
+                  onClick={() => setInput(c.label)}
+                  className="mr-2 rounded border border-red-300 bg-white px-2 py-1 text-xs hover:bg-red-50"
+                  title={c.description}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {state.result && <ResultTable table={state.result} />}
+
+          {state.chart && state.result && (
+            <ChartPanel spec={state.chart} table={state.result} />
+          )}
+
+          {state.summaryText && (
+            <p className="text-sm leading-relaxed">{state.summaryText}</p>
+          )}
+
+          {state.receipt && <ReceiptCard receipt={state.receipt} />}
+
+          {state.stats && (
+            <p className="text-xs text-neutral-400">
+              {state.stats.attempts} 次尝试 · {state.stats.llmCalls} 次模型调用 ·{" "}
+              {state.stats.tokensInput + state.stats.tokensOutput} tokens ·{" "}
+              {state.stats.elapsedMs} ms
+            </p>
+          )}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      )}
+    </main>
   );
 }

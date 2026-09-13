@@ -76,6 +76,8 @@ export interface RunStats {
 export interface RunState {
   runId: string | null;
   asOfDate: string | null;
+  /** time_resolved 的回显文案（"已理解为 2026-08-02 ~ 2026-08-31"），状态条展示 */
+  timeDisplay: string | null;
   phase: RunPhase;
 
   /** 全部 SQL 尝试，并列保留 —— 招牌演示需要左右对比第 1 次和第 2 次 */
@@ -110,6 +112,7 @@ export function emptyRunState(): RunState {
   return {
     runId: null,
     asOfDate: null,
+    timeDisplay: null,
     phase: "understanding",
     attempts: [],
     result: null,
@@ -136,7 +139,7 @@ export function reduceEvent(state: RunState, event: CaliberEvent): RunState {
       return { ...state, runId: event.runId, asOfDate: event.asOfDate, phase: "understanding" };
 
     case "time_resolved":
-      return { ...state, asOfDate: event.to };
+      return { ...state, asOfDate: event.to, timeDisplay: event.display };
 
     case "context_built":
       // 表名列表只在演示时有意义，不进状态条；保留 phase 推进即可
