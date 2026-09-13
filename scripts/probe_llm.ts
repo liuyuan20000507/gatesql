@@ -36,12 +36,10 @@ async function tryChatCompletions(baseURL: string, apiKey: string, model: string
 
 async function tryResponses(baseURL: string, apiKey: string, model: string) {
   const client = new OpenAI({ baseURL, apiKey, timeout: 30000 });
-  // @ts-expect-error — responses API 在 SDK 类型里可能滞后，运行时可用
   const res = await client.responses.create({
     model,
     input: "请只回复两个字：你好",
   });
-  // @ts-expect-error — 同上
   return res.output_text;
 }
 
