@@ -1,0 +1,94 @@
+import Link from "next/link";
+
+import { ChartPanel } from "@/components/chat/chart-panel";
+import { ReceiptCard } from "@/components/chat/receipt-card";
+import { ResultTable } from "@/components/chat/result-table";
+import { SqlAttemptsPanel } from "@/components/chat/sql-attempts-panel";
+import { StatusBar } from "@/components/chat/status-bar";
+import { Badge } from "@/components/ui/badge";
+import { reduceEvents } from "@/lib/reduce-events";
+import { getRunEvents } from "@/lib/fixtures/stub-store";
+
+/**
+ * 历史回放页（1E）。
+ *
+ * 服务端读取该次 run 的全部事件，用与实时页面同一个 reduceEvents 折叠、
+ * 渲染同一批组件 —— 两处不可能不一致，这就是 1B 那步设计的兑现时刻。
+ *
+ * 注意：数据来自进程内 Map，dev server 重启后丢失（会显示提示）。
+ * 第 2 周换成 app.db 的 events 表。
+ */
+
+export const dynamic = "force-dynamic";
+
+export default async function RunDetailPage({ params }: PageProps<"/runs/[id]">) {
+  const { id } = await params;
+  const events = getRunEvents(id);
+
+  if (!events) {
+    return (
+      <main className="mx-auto min-h-dvh max-w-3xl px-4 py-8">
+        <Link href="/" className="text-sm text-neutral-500 hover:underline">
+          ← 返回
+        </Link>
+        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          找不到这次问答的记录。最可能的原因：dev server 重启过（第 1 周的数据存在内存里，
+          重启即失）。第 2 周落库后此页面在重启后依然可用。
+        </div>
+      </main>
+    );
+  }
+
+  const state = reduceEvents(events);
+
+  return (
+    <main className="mx-auto min-h-dvh max-w-3xl px-4 py-8">
+      <div className="mb-6 flex items-center justify-between">
+        <Link href="/" className="text-sm text-neutral-500 hover:underline">
+          ← 返回
+        </Link>
+        <span className="font-mono text-xs text-neutral-400">{id}</span>
+      </div>
+
+      <header className="mb-6">
+        <h1 className="text-xl font-semibold tracking-tight">历史回放 · {id}</h1>
+        <p className="text-sm text-neutral-500">
+          本页由服务端用与实时页面相同的折叠函数渲染，内容与实时过程逐字一致。
+        </p>
+      </header>
+
+      <div className="space-y-4">
+        <StatusBar phase={state.phase} timeDisplay={state.timeDisplay} verdict={state.verdict} />
+
+        {state.attempts.length > 0 && <SqlAttemptsPanel attempts={state.attempts} />}
+
+        {state.verdict === "refused" && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+            <div className="mb-2"><Badge variant="destructive">已拒答</Badge></div>
+            <ul className="list-disc pl-5 text-xs text-red-800">
+              {state.verdictReasons.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {state.result && <ResultTable table={state.result} />}
+
+        {state.chart && state.result && <ChartPanel spec={state.chart} table={state.result} />}
+
+        {state.summaryText && <p className="text-sm leading-relaxed">{state.summaryText}</p>}
+
+        {state.receipt && <ReceiptCard receipt={state.receipt} />}
+
+        {state.stats && (
+          <p className="text-xs text-neutral-400">
+            {state.stats.attempts} 次尝试 · {state.stats.llmCalls} 次模型调用 ·{" "}
+            {state.stats.tokensInput + state.stats.tokensOutput} tokens ·{" "}
+            {state.stats.elapsedMs} ms
+          </p>
+        )}
+      </div>
+    </main>
+  );
+}

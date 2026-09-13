@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { ChatRequestSchema, encodeSseEvent } from "@/lib/events";
 import { buildStubRun } from "@/lib/fixtures/stub-run";
+import { saveRunEvents } from "@/lib/fixtures/stub-store";
 
 /**
  * 第 1 周的桩接口：按契约顺序推送剧本事件。
@@ -26,6 +27,8 @@ export async function POST(req: NextRequest) {
 
   const runId = `r_${crypto.randomUUID().slice(0, 8)}`;
   const script = buildStubRun(runId);
+  // 第 2 周这里换成「边执行边落 app.db 的 events 表」，接口不变
+  saveRunEvents(runId, script);
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {

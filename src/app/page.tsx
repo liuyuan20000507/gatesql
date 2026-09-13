@@ -11,11 +11,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CaliberEvent } from "@/lib/events";
-import { emptyRunState, reduceEvent } from "@/lib/reduce-events";
+import { emptyRunState, reduceEvent, type RunState } from "@/lib/reduce-events";
 import { postChatStream } from "@/lib/sse-client";
 
 export default function Home() {
-  const [state, dispatchEvent] = useReducer(reduceEvent, undefined, emptyRunState);
+  // reset 与事件分两类 action：新提问必须清空上一次的状态，
+  // 否则 attempts/summaryText 会跨 run 累加（实测踩过：结论文字翻倍）
+  const [state, dispatch] = useReducer(
+    (s: RunState, action: { kind: "reset" } | { kind: "event"; event: CaliberEvent }) =>
+      action.kind === "reset" ? emptyRunState() : reduceEvent(s, action.event),
+    undefined,
+    emptyRunState,
+  );
+  const dispatchEvent = useCallback((event: CaliberEvent) => dispatch({ kind: "event", event }), []);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -31,6 +39,7 @@ export default function Home() {
     const ac = new AbortController();
     abortRef.current = ac;
     setStreaming(true);
+    dispatch({ kind: "reset" });
 
     try {
       await postChatStream("/api/chat", { question, conversationId: null }, dispatchEvent, ac.signal);
@@ -122,7 +131,10 @@ export default function Home() {
             <p className="text-xs text-neutral-400">
               {state.stats.attempts} 次尝试 · {state.stats.llmCalls} 次模型调用 ·{" "}
               {state.stats.tokensInput + state.stats.tokensOutput} tokens ·{" "}
-              {state.stats.elapsedMs} ms
+              {state.stats.elapsedMs} ms ·{" "}
+              <a href={`/runs/${state.runId}`} className="underline hover:text-neutral-600">
+                查看历史回放
+              </a>
             </p>
           )}
         </div>
