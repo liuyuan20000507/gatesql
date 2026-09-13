@@ -14,7 +14,14 @@
  */
 
 import { DatabaseSync } from "node:sqlite";
-import { Parser, type AST } from "node-sql-parser";
+import { Parser, type AST, type Option } from "node-sql-parser";
+
+function astifyWithSqliteDialect(parser: Parser, sql: string): unknown {
+  // 实测：运行时只认 databaseType 键（window 函数在 database:'sqlite' 下
+  // 会解析失败，且默认方言会破坏部分语法）；而 5.4.0 的类型声明误写成了
+  // database —— 上游类型 bug，用断言绕开，运行时键保持正确。
+  return parser.astify(sql, { databaseType: "sqlite" } as unknown as Option);
+}
 
 /* ------------------------------------------------------------------ */
 /* 对外类型（消费方：executor.ts / loop.ts / route.ts，勿改签名）       */
@@ -187,7 +194,7 @@ export function guardSql(rawSql: string): GuardVerdict {
   // —— 步骤 2：解析并判定多语句 ——
   let parsed: unknown;
   try {
-    parsed = new Parser().astify(stripped, { database: "sqlite" });
+    parsed = astifyWithSqliteDialect(new Parser(), stripped);
   } catch {
     // 解析失败即拒绝。实测 v5 对 CTE 藏写操作 / PRAGMA / ATTACH 都会解析失败，
     // 这条路径天然兜住了它们。
