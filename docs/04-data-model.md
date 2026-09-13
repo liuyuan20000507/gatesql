@@ -78,7 +78,7 @@ SQLite 原生不支持列注释，所以单独建表存。`GET /api/schema` 和�
 | `column_name` | 列名，`_table` 表示这是表级注释 |
 | `comment` | 中文说明 |
 
-> agent 的 `setAuthorizer` 白名单里**不包含** `_column_comments` 和 `sqlite_master` —— schema 信息由应用层主动组装后喂给模型，不允许模型自己去查。
+> `_column_comments` 和 `sqlite_master` 不允许被 SQL 查询 —— schema 信息由应用层主动组装后喂给模型。拦截在语句层完成（guardSql 的表名收集，见 [安全设计](07-security.md)）；引擎层 authorizer 按动作码挡写操作，实测不传递表名，故不做表级过滤。
 
 ### 三个刻意埋设的陷阱
 

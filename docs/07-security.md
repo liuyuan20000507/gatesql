@@ -21,7 +21,7 @@
 
 > **不用 `?immutable=1`** —— immutable 让 SQLite 假定文件永不改变并跳过锁，一旦重新 seed，长连接可能读到脏页或过期数据。
 
-**防住的**：引擎级兜底，即使上面所有层全被绕过也写不进去。
+**防住的**：引擎级兜底 —— 即使上面所有层全被绕过也写不进去（实测 `DELETE` 抛 `attempt to write a readonly database`）。
 **防不住的**：SELECT 级别的越权读取、资源耗尽。所以它不能是唯一防线。
 
 ## 第 2 层 · 引擎级授权回调（安全叙事的核心）
@@ -32,11 +32,11 @@
 |---|---|
 | `READ` (20) / `SELECT` (21) / `FUNCTION` (31) | `INSERT` / `UPDATE` / `DELETE` / `DROP` / `ALTER` / `ATTACH` / `DETACH` / `PRAGMA` / `CREATE` |
 
-再用**表名维度**挡掉 `sqlite_master` 和 `_column_comments` —— schema 信息由应用层主动组装后喂给模型，不允许模型自己去查。
-
 > **为什么这是核心**：因为回调拿到的是 SQLite **自己解析后的语义**，所以 `/**/` 注释拆词、大小写混写、全角字符、藏在 CTE 里的写操作**一概失效**。这是文本匹配永远做不到的。
 
-**注意它的边界**：只在 prepare 阶段触发（实测 prepare 3 次、执行 0 次），它是**编译期闸门**，不能当超时或行数限制用。
+> **实测边界（Node v24 + node:sqlite）**：READ 动作上报的是 `(列名, schema 名)` 而不是表名（`SELECT id FROM orders` → `[20,"id","main"]`），`sqlite_master` 这类内部虚拟表同样不携带表名 —— 所以「在引擎层按表名挡掉 sqlite_master / _column_comments」在 node:sqlite 上**无法实现**。该职责由语句层 AST 表名收集（第 4 层）承担。**这是分层分工而非缺口**：引擎层按动作码挡写/结构/外挂，语句层挡内部表读取，各有各擅长的攻击面。
+
+**注意它的边界**：只在 prepare 阶段触发，它是**编译期闸门**，不能当超时或行数限制用。
 
 ## 第 3 层 · 全局禁用 `db.exec()`
 

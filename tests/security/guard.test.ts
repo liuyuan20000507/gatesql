@@ -111,19 +111,22 @@ describe("openReadOnlyConnection：连接层 + authorizer", () => {
 
   it("只读连接拒绝一切写语句", () => {
     const db = freshConnection();
-    expect(() => db.exec("DELETE FROM orders")).toThrow(/readonly/i);
+    // authorizer 会先于 readOnly 拦下写语句，报错信息不一定是 readonly——
+    // 契约是「任何写操作都抛异常」，两层任一生效即通过
+    expect(() => db.exec("DELETE FROM orders")).toThrow();
   });
 
-  it("authorizer 拒绝非白名单表的读取（sqlite_master / _column_comments）", () => {
+  it("authorizer 的职责边界：按动作码拒绝写/结构/外挂，不承担表名过滤", () => {
     const db = freshConnection();
-    // authorizer 在 prepare 阶段生效
-    expect(() => db.prepare("SELECT * FROM sqlite_master")).toThrow();
-    expect(() => db.prepare("SELECT * FROM _column_comments")).toThrow();
+    // 表名级过滤（sqlite_master / _column_comments 的读取）由 guardSql 的
+    // 语句层承担，已在「30 条攻击语料」中覆盖。此处只验证引擎层做得到的事：
+    // 任何写动作在 prepare 阶段即被拒绝，不依赖表名。
+    expect(() => db.prepare("INSERT INTO orders VALUES (1,2,'2026-01-01','已完成','APP')")).toThrow();
+    expect(() => db.prepare("UPDATE orders SET status='已退款'")).toThrow();
   });
 
   it("authorizer 放行业务表的正常 SELECT", () => {
     const db = freshConnection();
-    const rows = db.prepare("SELECT COUNT(*) AS n FROM orders").all();
     expect(db.prepare("SELECT COUNT(*) AS n FROM orders").get()).toEqual({ n: 12000 });
   });
 
