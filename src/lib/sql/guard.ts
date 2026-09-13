@@ -14,7 +14,7 @@
  */
 
 import { DatabaseSync } from "node:sqlite";
-import { Parser } from "node-sql-parser";
+import { Parser, type AST } from "node-sql-parser";
 
 /* ------------------------------------------------------------------ */
 /* 对外类型（消费方：executor.ts / loop.ts / route.ts，勿改签名）       */
@@ -187,7 +187,7 @@ export function guardSql(rawSql: string): GuardVerdict {
   // —— 步骤 2：解析并判定多语句 ——
   let parsed: unknown;
   try {
-    parsed = new Parser().astify(stripped, { databaseType: "sqlite" });
+    parsed = new Parser().astify(stripped, { database: "sqlite" });
   } catch {
     // 解析失败即拒绝。实测 v5 对 CTE 藏写操作 / PRAGMA / ATTACH 都会解析失败，
     // 这条路径天然兜住了它们。
@@ -241,7 +241,7 @@ export function guardSql(rawSql: string): GuardVerdict {
 
   // —— 步骤 6：重建 SQL 文本 ——
   try {
-    const finalSql = new Parser().sqlify(ast);
+    const finalSql = new Parser().sqlify(ast as unknown as AST);
     return { ok: true, sql: finalSql };
   } catch {
     return { ok: false, reason: "AST_PARSE_FAILED", detail: "改写后的 SQL 重建失败，已按不信任处理" };
