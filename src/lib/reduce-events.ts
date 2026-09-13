@@ -177,7 +177,15 @@ export function reduceEvent(state: RunState, event: CaliberEvent): RunState {
       };
 
     case "verification":
-      return { ...state, phase: "verifying", verification: { ...event } };
+      return {
+        ...state,
+        phase: "verifying",
+        verification: {
+          checks: event.checks,
+          emptyReason: event.emptyReason,
+          incompletePeriod: event.incompletePeriod,
+        },
+      };
 
     case "receipt":
       return {
