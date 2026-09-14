@@ -179,6 +179,8 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
   let sameFingerprintHits = 0;
   /** 连续 SCHEMA_PARSE_FAILED 计数 —— 连续失败会有明确结局而不是烧光预算 */
   let consecutiveParseFailures = 0;
+  /** 最近一次模型原始回复（结构化解析失败时用来给用户一个可读的说明） */
+  let lastModelText = "";
   let attempts = 0;
   let finalStatus: string = "ok";
   let verdict: RunSummary["verdict"] = null;
@@ -255,6 +257,13 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         "只能使用已列出的表和字段；如果数据源中确实不存在能回答问题的数据，",
         "把 unanswerable 设为 true 并说明原因，不要编造 SQL。",
         "",
+        "【输出格式·必须严格遵守】",
+        '只输出一个 JSON 对象，不要 markdown 代码围栏，不要任何解释性文字。字段：',
+        '  sql: 只读查询语句（不要带结尾分号）',
+        '  unanswerable: 布尔，数据源无法回答时为 true',
+        '  unanswerableReason: 当 unanswerable=true 时填写原因',
+        '示例：{"sql":"SELECT COUNT(*) AS n FROM customers","unanswerable":false,"unanswerableReason":""}',
+        "",
         "表结构：",
         ctx.card,
       ].join("\n");
@@ -280,17 +289,38 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       llmCalls++;
       inputTokens += gen.inputTokens;
       outputTokens += gen.outputTokens;
+      lastModelText = gen.text;
 
-      // 结构化解析：失败走 SCHEMA_PARSE_FAILED（计入 llmCalls，不计入 repairs；
-      // 连续失败给出明确结局，而不是把预算耗光还答不明白 —— 见 consecutiveParseFailures）
+      // 结构化解析：失败走 SCHEMA_PARSE_FAILED（计入 llmCalls，不计入 repairs）
       const parsed = tryParseJson<{ sql?: unknown; unanswerable?: unknown; unanswerableReason?: unknown }>(gen.text);
+
+      // 关键判断：sql 为空有两种可能 ——
+      // ① unanswerable=true 时本来就允许空 sql（模型诚实地说「答不了」）→ 接受并拒答
+      // ② 真正缺 sql 字段 / 解析失败 → 才走 parse-fail 重试
+      if (parsed && (typeof parsed.sql === "string" ? !parsed.sql.trim() : !("sql" in parsed))) {
+        if (parsed.unanswerable === true) {
+          verdict = "refused";
+          finalStatus = "unanswerable";
+          verdictReasons.push(
+            typeof parsed.unanswerableReason === "string" && parsed.unanswerableReason
+              ? parsed.unanswerableReason
+              : "数据源中不存在能回答该问题的数据",
+          );
+          break;
+        }
+      }
       if (!parsed || typeof parsed.sql !== "string" || !parsed.sql.trim()) {
         repairHistory.push({ attempt, kind: "SCHEMA_PARSE_FAILED", detail: "模型输出的 JSON 无法解析或无 sql 字段" });
         consecutiveParseFailures++;
         if (consecutiveParseFailures >= 3) {
           verdict = "refused";
           finalStatus = "SCHEMA_PARSE_FAILED";
-          verdictReasons.push("模型连续多次无法输出可解析的 SQL 结构，已终止");
+          const snippet = lastModelText.replace(/\s+/g, " ").trim().slice(0, 120);
+          verdictReasons.push(
+            `暂时无法生成可执行的查询：模型连续 3 次未返回结构化 SQL` +
+              (snippet ? `（模型最后一次回复大意：“${snippet}…”）` : "") +
+              `。若问题涉及数据库中不存在的表或字段，可改用其它问法；当前可查询：customers / products / orders / order_items。`,
+          );
           break;
         }
         continue;
