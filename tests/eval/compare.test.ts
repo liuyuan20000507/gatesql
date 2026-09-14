@@ -31,10 +31,30 @@ describe("列名与列序", () => {
     expect(resultsEqual(gold, agent, unordered).equal).toBe(true);
   });
 
+  it("agent 多给说明列，但 gold 列能按名字对齐 → 相等（列投影；F1/F3 基线误判的修复）", () => {
+    const gold: ResultSetLike = { columns: ["name", "total_spent"], rows: [["何明", 147531.97]] };
+    const agent: ResultSetLike = {
+      columns: ["customer_id", "customer_name", "total_spent"],
+      rows: [[324, "何明", 147531.97]],
+    };
+    expect(resultsEqual(gold, agent, unordered).equal).toBe(true);
+  });
+
+  it("agent 多给列且列名对不上（中文别名 + 列数不同）→ 不相等（无法确定哪列是答案）", () => {
+    const gold: ResultSetLike = { columns: ["level", "avg_order_value"], rows: [["普通", 5088.94]] };
+    const agent: ResultSetLike = {
+      columns: ["会员等级", "客单价", "已完成销售额", "去重订单数"],
+      rows: [["普通", 5088.94, 20803587.9, 4088]],
+    };
+    const r = resultsEqual(gold, agent, unordered);
+    expect(r.equal).toBe(false);
+    expect(r.reason).toContain("列无法对齐");
+  });
+
   it("列数不同 → 不相等，且原因里带列名方便定位", () => {
     const r = resultsEqual({ columns: ["a", "b"], rows: [[1, 2]] }, { columns: ["a"], rows: [[1]] }, unordered);
     expect(r.equal).toBe(false);
-    expect(r.reason).toContain("列数不同");
+    expect(r.reason).toContain("列无法对齐");
   });
 });
 

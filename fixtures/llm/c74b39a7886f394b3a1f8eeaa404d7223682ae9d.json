@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"category\",\"y\":[\"order_count\"],\"title\":\"各分类订单数量\",\"summary\":\"五大分类的订单量高度接近，服饰鞋包与食品生鲜略居前列，家用电器相对垫底，整体分布均衡无明显差距。\"}",
+  "inputTokens": 588,
+  "outputTokens": 134
+}

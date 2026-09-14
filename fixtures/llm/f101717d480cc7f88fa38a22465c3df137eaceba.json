@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT COUNT(DISTINCT product_id) AS product_count FROM order_items\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 862,
+  "outputTokens": 649
+}

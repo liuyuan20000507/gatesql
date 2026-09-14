@@ -1,5 +1,5 @@
 {
   "text": "{\"sql\":\"SELECT COUNT(*) AS customer_count FROM customers\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
   "inputTokens": 897,
-  "outputTokens": 107
+  "outputTokens": 116
 }

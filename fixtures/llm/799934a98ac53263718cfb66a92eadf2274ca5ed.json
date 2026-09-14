@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT ROUND(SUM(oi.amount), 2) AS total_revenue, ROUND(SUM((oi.unit_price - p.cost) * oi.quantity), 2) AS gross_profit, ROUND(SUM((oi.unit_price - p.cost) * oi.quantity) * 100.0 / SUM(oi.amount), 2) AS profit_margin_pct FROM orders o JOIN order_items oi ON oi.order_id = o.id JOIN products p ON p.id = oi.product_id WHERE o.status = '已完成'\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1100,
+  "outputTokens": 519
+}

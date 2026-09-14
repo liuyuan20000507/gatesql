@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT p.name AS 商品名称, SUM(oi.quantity) AS 总销量 FROM order_items oi JOIN products p ON p.id = oi.product_id JOIN orders o ON o.id = oi.order_id WHERE o.status = '已完成' GROUP BY p.id, p.name ORDER BY 总销量 DESC LIMIT 10\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 865,
+  "outputTokens": 864
+}

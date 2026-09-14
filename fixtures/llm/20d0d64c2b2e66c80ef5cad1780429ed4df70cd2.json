@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"category\",\"y\":[\"total_quantity\"],\"title\":\"各分类销量对比\",\"summary\":\"服饰鞋包以微弱优势领先，食品生鲜和家用电器紧随其后，三者销量非常接近，差距极小。\"}",
+  "inputTokens": 447,
+  "outputTokens": 176
+}

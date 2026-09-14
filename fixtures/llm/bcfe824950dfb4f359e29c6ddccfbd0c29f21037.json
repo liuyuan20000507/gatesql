@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"channel\",\"y\":[\"order_count\"],\"title\":\"各渠道订单量分布\",\"summary\":\"三个渠道的订单量整体较为接近，其中未知渠道略居首位，各渠道之间差异很小，分布相对均衡。\"}",
+  "inputTokens": 477,
+  "outputTokens": 301
+}

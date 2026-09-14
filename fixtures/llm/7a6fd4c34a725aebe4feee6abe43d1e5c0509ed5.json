@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT SUM(oi.amount) AS sales_amount FROM orders o JOIN order_items oi ON oi.order_id = o.id JOIN customers c ON c.id = o.customer_id WHERE o.status = '已完成' AND c.region = '华东'\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 898,
+  "outputTokens": 452
+}

@@ -155,9 +155,11 @@ async function main() {
           outcomes.push({ item, pass: false, verdict, failReason, summary });
         } else {
           const goldResult = executeGold(item.goldSql!, env.SHOP_DB_PATH);
-          const cmp = resultsEqual(goldResult, agentResult, {
-            ordered: /order\s+by/i.test(item.goldSql!),
-          });
+          // 行序只在「排行榜」题（ORDER BY + LIMIT）校验 —— 名次即语义。
+          // 普通分组题每行自带键（月份/分类/渠道），行序是展示问题，基线 #1 实测
+          // 3 道题（C4/D2/D4）因 agent 没排序被误判，数字本身全对。
+          const ordered = /order\s+by/i.test(item.goldSql!) && /limit\s+\d/i.test(item.goldSql!);
+          const cmp = resultsEqual(goldResult, agentResult, { ordered });
           if (cmp.equal) {
             process.stdout.write("✓ 与 gold 等价\n");
             outcomes.push({ item, pass: true, verdict, failReason: null, summary });

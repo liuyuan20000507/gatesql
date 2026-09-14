@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"line\",\"x\":\"month\",\"y\":[\"total_sales\"],\"title\":\"月度销售额趋势\",\"summary\":\"八月销售额较七月有所增长，整体呈上升趋势。\"}",
+  "inputTokens": 370,
+  "outputTokens": 186
+}

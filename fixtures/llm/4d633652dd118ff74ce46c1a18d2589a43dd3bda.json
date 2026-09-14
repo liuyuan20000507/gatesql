@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"customer_name\",\"y\":[\"total_spent\"],\"title\":\"消费金额最高的客户排行\",\"summary\":\"头部客户消费金额位居前列且彼此差距不大，呈平缓递减分布，未出现断层式领先者。\"}",
+  "inputTokens": 639,
+  "outputTokens": 169
+}

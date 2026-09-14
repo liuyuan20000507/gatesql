@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT ROUND(SUM(oi.amount) / COUNT(DISTINCT o.id), 2) AS avg_order_amount FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.status = '已完成'\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 934,
+  "outputTokens": 283
+}

@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT c.level AS 会员等级, ROUND(SUM(oi.amount) * 1.0 / COUNT(DISTINCT o.id), 2) AS 客单价, SUM(oi.amount) AS 已完成销售额, COUNT(DISTINCT o.id) AS 去重订单数 FROM customers c JOIN orders o ON o.customer_id = c.id JOIN order_items oi ON oi.order_id = o.id WHERE o.status = '已完成' GROUP BY c.level ORDER BY c.level\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1033,
+  "outputTokens": 651
+}

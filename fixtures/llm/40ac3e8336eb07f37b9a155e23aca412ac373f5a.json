@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"数据源中不存在库存相关数据。计算库存周转率需要期初/期末库存数量或平均库存（以及销售成本），但四张表中没有任何库存数量字段：customers 只有客户属性，products 只有价格和成本，orders 和 order_items 只记录销售订单及明细。无法用现有表计算库存周转率。\"}",
+  "inputTokens": 1100,
+  "outputTokens": 273
+}

@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"order_id\",\"y\":[\"total_amount\"],\"title\":\"大额订单金额对比\",\"summary\":\"头部订单金额处于相近水平，榜首略微领先，各订单间差距平缓，未出现明显断层。\"}",
+  "inputTokens": 514,
+  "outputTokens": 300
+}

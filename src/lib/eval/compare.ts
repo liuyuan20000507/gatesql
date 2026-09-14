@@ -3,9 +3,12 @@
  *
  * 评测只比执行结果，不比 SQL 文本 —— 同一问题有无数种正确写法。
  * 规则（每条都有单测，见 tests/eval/compare.test.ts）：
- *   - 列名不参与比较：列按「名字相同则按名对齐，否则按下标对齐」映射
- *   - 列序无关：只要两边列名集合能一一对应，顺序不同也算相等
- *   - 行序：仅当 gold SQL 含 ORDER BY 时才校验（由调用方传 ordered）
+ *   - 列投影：gold 的列按名字对齐到 agent 的列（精确 → 包含 → 数量相等时按下标）。
+ *     agent 多给的说明列不参与比较 —— 基线 #1 实测 3 道题因多给列被误判（C3/F1/F3），
+ *     而真实产品里多给上下文列是更好的交付，不是错误
+ *   - 列序无关
+ *   - 行序：由调用方决定（eval 脚本的口径：gold 同时含 ORDER BY 和 LIMIT
+ *     —— 即排行榜，名次即语义 —— 才校验行序；普通分组题每行自带键，行序是展示问题）
  *   - 浮点容差：数值四舍五入到 2 位小数后比较（本库金额即 2 位精度）
  *   - int 与 decimal 归一：5 与 5.0 视为相等
  *   - NULL / 0 / 空字符串三者严格判不等
@@ -21,7 +24,7 @@ export interface ResultSetLike {
 }
 
 export interface CompareOptions {
-  /** gold SQL 是否含 ORDER BY —— 只有含时才校验行序 */
+  /** 本次比较是否校验行序（eval 脚本口径：gold 含 ORDER BY + LIMIT 的排行榜题才传 true） */
   ordered: boolean;
 }
 
@@ -47,28 +50,43 @@ function cellToken(value: unknown): string {
 }
 
 /**
- * 列映射：gold 的每一列对应 agent 的哪一列。
- * 优先按列名对齐（名字能一一配对时），否则退回按下标对齐。
+ * 列投影映射：gold 的每一列对应 agent 的哪一列。
+ *
+ * 三级对齐：
+ *   1. 列名精确相同（不区分大小写）
+ *   2. 名字包含关系（gold "name" ↔ agent "customer_name"）
+ *   3. 剩余列数量相等时按下标对齐（兜底 aggregate 自动命名 / 中文别名的场景）
+ * 剩余数量不相等则映射失败 —— 此时无法确定 agent 多出来的列哪个是答案。
  */
 function buildColumnMapping(goldCols: string[], agentCols: string[]): number[] | null {
-  if (goldCols.length !== agentCols.length) return null;
-
-  const byName: number[] = [];
   const used = new Set<number>();
-  let nameMatchable = true;
-  for (const col of goldCols) {
-    const idx = agentCols.findIndex((c, i) => c === col && !used.has(i));
-    if (idx === -1) {
-      nameMatchable = false;
-      break;
-    }
-    used.add(idx);
-    byName.push(idx);
-  }
-  if (nameMatchable) return byName;
+  const mapping: Array<number | undefined> = new Array(goldCols.length).fill(undefined);
 
-  // 列名对不上（例如 aggregate 自动命名成 COUNT(*)）—— 按下标对齐
-  return goldCols.map((_, i) => i);
+  for (const pass of ["exact", "contains"] as const) {
+    for (let g = 0; g < goldCols.length; g++) {
+      if (mapping[g] !== undefined) continue;
+      const goldLower = goldCols[g].toLowerCase();
+      const idx = agentCols.findIndex((c, i) => {
+        if (used.has(i)) return false;
+        const agentLower = c.toLowerCase();
+        return pass === "exact" ? agentLower === goldLower : agentLower.includes(goldLower) || goldLower.includes(agentLower);
+      });
+      if (idx !== -1) {
+        mapping[g] = idx;
+        used.add(idx);
+      }
+    }
+  }
+
+  const unmatchedGold = goldCols.map((_, i) => i).filter((i) => mapping[i] === undefined);
+  const unusedAgent = agentCols.map((_, i) => i).filter((i) => !used.has(i));
+  // agent 多出来的列合法地没有归属（投影语义）；只有 gold 列找不到归属才需要兜底：
+  // 剩余数量相等时按下标对齐，否则无法确定哪列是答案 → 失败
+  if (unmatchedGold.length > 0 && unmatchedGold.length !== unusedAgent.length) return null;
+  unmatchedGold.forEach((g, k) => {
+    mapping[g] = unusedAgent[k];
+  });
+  return mapping as number[];
 }
 
 function rowKey(row: readonly unknown[], idxs: number[]): string {
@@ -81,16 +99,12 @@ function rowKey(row: readonly unknown[], idxs: number[]): string {
  * @param agent agent 实际交付的结果（取自 rows 事件）
  */
 export function resultsEqual(gold: ResultSetLike, agent: ResultSetLike, opts: CompareOptions): CompareResult {
-  if (gold.columns.length !== agent.columns.length) {
-    return {
-      equal: false,
-      reason: `列数不同：gold ${gold.columns.length} 列 [${gold.columns.join(", ")}]，agent ${agent.columns.length} 列 [${agent.columns.join(", ")}]`,
-    };
-  }
-
   const mapping = buildColumnMapping(gold.columns, agent.columns);
   if (!mapping) {
-    return { equal: false, reason: "列无法一一对应" };
+    return {
+      equal: false,
+      reason: `列无法对齐：gold ${gold.columns.length} 列 [${gold.columns.join(", ")}]，agent ${agent.columns.length} 列 [${agent.columns.join(", ")}]（列数不同且无法按名字对齐）`,
+    };
   }
 
   if (gold.rows.length !== agent.rows.length) {

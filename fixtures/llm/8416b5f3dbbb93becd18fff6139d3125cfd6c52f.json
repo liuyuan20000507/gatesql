@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT COUNT(*) AS completed_orders FROM orders WHERE status = '已完成' AND created_at >= '2025-04-01' AND created_at < '2025-07-01'\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 902,
+  "outputTokens": 309
+}

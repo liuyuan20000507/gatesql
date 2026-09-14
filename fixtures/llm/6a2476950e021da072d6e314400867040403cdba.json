@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT p.category AS category, COUNT(DISTINCT o.id) AS order_count FROM orders o JOIN order_items oi ON oi.order_id = o.id JOIN products p ON p.id = oi.product_id WHERE o.status = '已完成' GROUP BY p.category ORDER BY order_count DESC\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1013,
+  "outputTokens": 753
+}
