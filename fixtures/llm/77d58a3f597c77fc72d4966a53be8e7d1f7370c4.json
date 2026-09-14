@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"order_id\",\"y\":[\"total_amount\"],\"title\":\"大额订单销售金额排行\",\"summary\":\"订单金额由高到低呈阶梯式递减，头部大额订单贡献突出，单笔订单之间金额差距明显。\"}",
+  "inputTokens": 466,
+  "outputTokens": 468
+}

@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT CASE WHEN o.created_at BETWEEN '2026-07-01' AND '2026-07-31' THEN '2026-07' WHEN o.created_at BETWEEN '2026-08-01' AND '2026-08-31' THEN '2026-08' END AS month, SUM(oi.amount) AS sales_amount FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.status = '已完成' AND (o.created_at BETWEEN '2026-07-01' AND '2026-07-31' OR o.created_at BETWEEN '2026-08-01' AND '2026-08-31') GROUP BY month ORDER BY sales_amount DESC\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 849,
+  "outputTokens": 983
+}

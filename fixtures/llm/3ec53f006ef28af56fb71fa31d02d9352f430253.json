@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"region\",\"y\":[\"customer_count\"],\"title\":\"各地区客户数量分布\",\"summary\":\"未知地区客户数量最多，提示地区字段存在较多缺失；各已知地区客户数量总体较为均衡，其中华东相对偏少。\"}",
+  "inputTokens": 484,
+  "outputTokens": 236
+}

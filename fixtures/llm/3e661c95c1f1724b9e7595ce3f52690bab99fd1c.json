@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"region\",\"y\":[\"customer_count\"],\"title\":\"各地区客户数量分布\",\"summary\":\"各地区客户数量分布较为均衡，未知地区略多，华东相对最少，整体差异不大。\"}",
+  "inputTokens": 412,
+  "outputTokens": 231
+}

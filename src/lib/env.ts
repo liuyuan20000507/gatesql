@@ -20,6 +20,8 @@ const EnvSchema = z.object({
   /** 单条查询超时 / 返回行数上限（与 guard 的 MAX_ROWS 语义一致） */
   QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   MAX_ROWS: z.coerce.number().int().positive().default(1000),
+  /** 上下文工程 A/B 开关（docs/08 第 4 周）：off 时 schema 卡片不注入低基数列枚举值 */
+  ENUM_INJECTION: z.enum(["on", "off"]).default("on"),
 });
 
 export type EnvConfig = z.infer<typeof EnvSchema>;

@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"category\",\"y\":[\"order_count\"],\"title\":\"各商品分类订单量对比\",\"summary\":\"五个分类的订单量高度接近，呈均衡分布态势，没有明显的领先或垫底分类。\"}",
+  "inputTokens": 514,
+  "outputTokens": 139
+}

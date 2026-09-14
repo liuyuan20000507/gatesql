@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT substr(o.created_at, 1, 7) AS month, SUM(oi.amount) AS sales_amount FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.status = '已完成' AND o.created_at >= '2026-07-01' AND o.created_at < '2026-09-01' GROUP BY month ORDER BY month\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 881,
+  "outputTokens": 1365
+}

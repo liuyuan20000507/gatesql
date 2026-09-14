@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"channel\",\"y\":[\"total_sales\"],\"title\":\"各渠道销售额对比\",\"summary\":\"各渠道销售额高度接近，无明显主次差距，且未知渠道占比不低，提示部分订单渠道信息缺失。\"}",
+  "inputTokens": 353,
+  "outputTokens": 226
+}

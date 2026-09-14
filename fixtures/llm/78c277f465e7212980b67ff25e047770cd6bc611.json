@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"product_name\",\"y\":[\"total_quantity\"],\"title\":\"商品销量排行TOP10\",\"summary\":\"头部商品销量整体接近，橄榄油以微弱优势领先，帽子与自拍杆紧随其后，各商品之间未拉开明显差距。\"}",
+  "inputTokens": 441,
+  "outputTokens": 191
+}

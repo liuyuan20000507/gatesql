@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"line\",\"x\":\"month\",\"y\":[\"sales_amount\"],\"title\":\"月度销售额趋势\",\"summary\":\"销售额环比上升，月度走势向好。\"}",
+  "inputTokens": 370,
+  "outputTokens": 181
+}

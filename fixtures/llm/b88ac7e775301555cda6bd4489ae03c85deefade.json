@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"product_name\",\"y\":[\"total_quantity\"],\"title\":\"商品销量Top10\",\"summary\":\"各商品销量差距很小，橄榄油小幅领先，热销商品间呈均衡分布。\"}",
+  "inputTokens": 484,
+  "outputTokens": 139
+}

@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"channel\",\"y\":[\"order_count\"],\"title\":\"各下单渠道订单量对比\",\"summary\":\"未知、APP、小程序三个渠道的订单量几乎持平，未出现明显主导渠道，整体分布高度均衡。\"}",
+  "inputTokens": 429,
+  "outputTokens": 355
+}

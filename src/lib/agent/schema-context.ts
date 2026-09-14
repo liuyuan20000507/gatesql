@@ -9,6 +9,7 @@
  * 命中任何一个表就只保留命中表；一个都不命中就全给（4 张表兜底）。
  */
 
+import { getConfig } from "@/lib/env";
 import { readShopSchema, type SchemaTable } from "@/lib/db/schema";
 
 export interface SchemaContext {
@@ -34,7 +35,8 @@ function tableHaystack(t: SchemaTable): string {
 function formatColumn(c: SchemaTable["columns"][number]): string {
   const parts: string[] = [];
   parts.push(`  ${c.name} ${c.type}` + (c.comment ? ` · ${c.comment}` : ""));
-  if (c.enumValues && c.enumValues.length > 0) {
+  // A/B 开关（docs/08 第 4 周）：off 时不注入枚举值，用来量化这项上下文工程值多少分
+  if (c.enumValues && c.enumValues.length > 0 && getConfig().ENUM_INJECTION === "on") {
     parts.push(`    枚举: [${c.enumValues.join(" / ")}]`);
   }
   return parts.join("\n");

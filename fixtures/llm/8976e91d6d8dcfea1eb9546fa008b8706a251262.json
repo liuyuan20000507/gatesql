@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"数据源中没有库存相关数据：products 表不含库存数量/期初期末存货字段，也没有任何库存变动记录表。库存周转率 = 销售成本 ÷ 平均库存，其中分母（平均库存）无法从现有 4 张表（customers/products/orders/order_items）计算得到，因此无法回答。\"}",
+  "inputTokens": 1179,
+  "outputTokens": 256
+}

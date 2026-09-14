@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"category\",\"y\":[\"total_quantity\"],\"title\":\"各商品分类销量对比\",\"summary\":\"服饰鞋包、食品生鲜、家用电器三个分类的销量非常接近，服饰鞋包略居首，家用电器稍落后，整体呈并驾齐驱的格局。\"}",
+  "inputTokens": 404,
+  "outputTokens": 204
+}

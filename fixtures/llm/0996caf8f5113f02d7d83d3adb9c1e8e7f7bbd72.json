@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT AVG(order_total) AS avg_order_value FROM (SELECT oi.order_id, SUM(oi.amount) AS order_total FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.status = '已完成' GROUP BY oi.order_id)\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 928,
+  "outputTokens": 501
+}

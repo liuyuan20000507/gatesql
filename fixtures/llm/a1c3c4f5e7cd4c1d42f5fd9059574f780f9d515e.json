@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"category\",\"y\":[\"gross_profit\"],\"title\":\"各商品分类毛利润对比\",\"summary\":\"食品生鲜毛利领先，家用电器与手机数码紧随其后，服饰鞋包垫底，各分类间呈明显的阶梯式递减分布。\"}",
+  "inputTokens": 367,
+  "outputTokens": 124
+}

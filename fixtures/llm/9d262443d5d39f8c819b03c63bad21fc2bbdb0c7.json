@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"month\",\"y\":[\"sales_amount\"],\"title\":\"月度销售额对比\",\"summary\":\"最近一个月销售额高于前一月，环比呈上升趋势。\"}",
+  "inputTokens": 339,
+  "outputTokens": 368
+}

@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"pie\",\"x\":\"channel\",\"y\":[\"sales_amount\"],\"title\":\"各渠道销售额占比\",\"summary\":\"各渠道销售额大体接近，小程序与APP领先，网页略低，未标注渠道的订单占比不容忽视。\"}",
+  "inputTokens": 384,
+  "outputTokens": 200
+}

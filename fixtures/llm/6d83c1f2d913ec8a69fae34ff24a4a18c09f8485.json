@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT ROUND(100.0 * SUM((oi.unit_price - p.cost) * oi.quantity) / SUM(oi.amount), 2) AS profit_margin_pct FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN products p ON p.id = oi.product_id WHERE o.status = '已完成'\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1064,
+  "outputTokens": 752
+}
