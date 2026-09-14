@@ -24,19 +24,15 @@ const EnvSchema = z.object({
 
 export type EnvConfig = z.infer<typeof EnvSchema>;
 
-let _cache: EnvConfig | null = null;
-
 /**
- * 每次现取（不做模块级缓存）：Zod 解析成本可忽略，而缓存会让测试
- * 里改 process.env 后拿到的还是旧配置。生产路径每个请求只解析一次，
- * 无所谓缓存。
+ * 每次现取（不做模块级缓存）：Zod 解析成本可忽略，而缓存会让测试、
+ * 评测脚本里改 process.env 后拿到的还是旧配置（实测踩过：eval.ts 先设
+ * LLM_MODE 再调 getConfig，因缓存顺序错了也不报错，假象难查）。
  */
 export function getConfig(): EnvConfig {
-  if (_cache) return _cache;
   const parsed = EnvSchema.safeParse(process.env);
   if (!parsed.success) {
     throw new Error(`环境变量配置不合法: ${JSON.stringify(parsed.error.flatten().fieldErrors)}`);
   }
-  _cache = parsed.data;
-  return _cache;
+  return parsed.data;
 }
