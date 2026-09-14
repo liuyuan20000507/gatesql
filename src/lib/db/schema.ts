@@ -29,6 +29,17 @@ const BUSINESS_TABLES = ["customers", "products", "orders", "order_items"];
 const ENUM_MAX_CARDINALITY = 20;
 const ENUM_MAX_VALUES = 20;
 
+/** 默认时钟 = 业务库数据的最大日期（docs/05-agent-design.md 的 AS_OF_DATE） */
+export function resolveDefaultAsOf(dbPath: string): string {
+  const db = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    const row = db.prepare("SELECT MAX(created_at) AS d FROM orders").get() as { d: string | null };
+    return row.d ?? new Date().toISOString().slice(0, 10);
+  } finally {
+    db.close();
+  }
+}
+
 export function readShopSchema(dbPath: string): SchemaTable[] {
   const db = new DatabaseSync(dbPath, { readOnly: true });
   try {
