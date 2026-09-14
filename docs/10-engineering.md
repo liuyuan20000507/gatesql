@@ -64,6 +64,7 @@
 | `LLM_API_KEY` | 模型密钥 | 缺失时自动进 replay 模式 |
 | `LLM_MODEL` | 模型名 | —— |
 | `LLM_MODE` | `live` / `record` / `replay` | 有 key 时 `live`，无 key 时 `replay` |
+| `LLM_WIRE` | 线上协议 `auto` / `responses` / `chat_completions` | `auto` 按 baseURL 推断（含 `/coding/` → responses） |
 | `SHOP_DB_PATH` | 被分析库路径 | `./data/shop.db` |
 | `APP_DB_PATH` | 应用库路径 | `./data/app.db` |
 | `AS_OF_DATE` | 覆盖默认时钟 | `max(orders.created_at)` |
@@ -78,6 +79,23 @@
 | `JWT_SECRET` | 签名密钥 | —— |
 
 **密钥只从环境变量读，绝不出现在代码里。** `.env.local` 已被 gitignore，仓库里只留 `.env.example`。
+
+### 切换模型供应商
+
+换供应商**不碰任何业务代码** —— 只改三个环境变量（含协议自动推断，见 `src/lib/agent/providers.ts`）：
+
+```bash
+# DeepSeek 示例
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_MODEL=deepseek-chat
+# (LLM_API_KEY 换成你的)
+
+# 火山 Coding Plan（默认，含 /coding/ 自动走 responses 协议）
+LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/coding/v3
+LLM_MODEL=ark-code-latest
+```
+
+**注意**：cassette 键包含协议类型（`wire`），切换供应商后旧 cassette 不会命中 —— 这是故意的，防止「换模型却复用旧响应」的假提升。
 
 ## 六、本机环境注意事项（Windows + GBK）
 

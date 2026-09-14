@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resolveTimeRange } from "@/lib/agent/time";
 import { buildSchemaContext } from "@/lib/agent/schema-context";
 import { callLlm, cassetteKey } from "@/lib/agent/llm";
+import { pickWire } from "@/lib/agent/providers";
 
 const SHOP_DB = "data/shop.db";
 const AS_OF = "2026-08-31";
@@ -87,7 +88,7 @@ describe("callLlm：cassette 回放", () => {
 
   it("replay 模式从 cassette 返回且不发起网络请求", async () => {
     const messages = [{ role: "user" as const, content: "你好" }];
-    const key = cassetteKey("test-model", messages);
+    const key = cassetteKey("chat_completions", "test-model", messages);
     mkdirSync(path.dirname(path.join("fixtures", "llm", `${key}.json`)), { recursive: true });
     writeFileSync(
       path.join("fixtures", "llm", `${key}.json`),
@@ -103,5 +104,21 @@ describe("callLlm：cassette 回放", () => {
   it("replay 模式缺 cassette 时报错（提示先录制）", async () => {
     const messages = [{ role: "user" as const, content: "这句从没录过" }];
     await expect(callLlm(messages)).rejects.toThrow(/找不到 cassette/);
+  });
+});
+
+describe("pickWire：对上协议推断", () => {
+  it("火山 Coding Plan 的 /coding/ 路径 → responses", () => {
+    const wire = pickWire("https://ark.cn-beijing.volces.com/api/coding/v3");
+    expect(wire).toBe("responses");
+  });
+
+  it("DeepSeek / OpenAI 通用路径 → chat_completions", () => {
+    expect(pickWire("https://api.deepseek.com/v1")).toBe("chat_completions");
+    expect(pickWire("https://api.openai.com/v1")).toBe("chat_completions");
+  });
+
+  it("显式 LLM_WIRE 优先于推断", () => {
+    expect(pickWire("https://api.deepseek.com/v1", "responses")).toBe("responses");
   });
 });

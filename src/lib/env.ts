@@ -11,6 +11,8 @@ const EnvSchema = z.object({
   LLM_MODEL: z.string().default("ark-code-latest"),
   /** live 真实调用 / record 录制 / replay 回放（无 key 或缺 key 时默认 replay） */
   LLM_MODE: z.enum(["live", "record", "replay"]).optional(),
+  /** 线上协议：auto（按 baseURL 推断）/ responses / chat_completions */
+  LLM_WIRE: z.enum(["auto", "responses", "chat_completions"]).default("auto"),
   SHOP_DB_PATH: z.string().default("data/shop.db"),
   APP_DB_PATH: z.string().default("data/app.db"),
   /** 覆盖默认时钟（默认 = shop.db 的 max(orders.created_at)） */
