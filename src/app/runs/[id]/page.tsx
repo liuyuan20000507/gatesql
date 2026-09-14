@@ -6,34 +6,38 @@ import { ResultTable } from "@/components/chat/result-table";
 import { SqlAttemptsPanel } from "@/components/chat/sql-attempts-panel";
 import { StatusBar } from "@/components/chat/status-bar";
 import { Badge } from "@/components/ui/badge";
+import { getEventsForRun, openAppDb } from "@/lib/db/app";
 import { reduceEvents } from "@/lib/reduce-events";
-import { getRunEvents } from "@/lib/fixtures/stub-store";
 
 /**
- * 历史回放页（1E）。
+ * 历史回放页。
  *
- * 服务端读取该次 run 的全部事件，用与实时页面同一个 reduceEvents 折叠、
+ * 服务端读取该次 run 的落库事件，用与实时页面同一个 reduceEvents 折叠、
  * 渲染同一批组件 —— 两处不可能不一致，这就是 1B 那步设计的兑现时刻。
- *
- * 注意：数据来自进程内 Map，dev server 重启后丢失（会显示提示）。
- * 第 2 周换成 app.db 的 events 表。
+ * 事件来自 app.db 的 events 表（2H 起由 route 落库），重启后依然存在。
  */
 
 export const dynamic = "force-dynamic";
 
 export default async function RunDetailPage({ params }: PageProps<"/runs/[id]">) {
   const { id } = await params;
-  const events = getRunEvents(id);
 
-  if (!events) {
+  const db = openAppDb();
+  let events;
+  try {
+    events = getEventsForRun(db, id);
+  } finally {
+    db.close();
+  }
+
+  if (events.length === 0) {
     return (
       <main className="mx-auto min-h-dvh max-w-3xl px-4 py-8">
         <Link href="/" className="text-sm text-neutral-500 hover:underline">
           ← 返回
         </Link>
         <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          找不到这次问答的记录。最可能的原因：dev server 重启过（第 1 周的数据存在内存里，
-          重启即失）。第 2 周落库后此页面在重启后依然可用。
+          找不到 id 为 <code className="rounded bg-amber-100 px-1">{id}</code> 的问答记录。
         </div>
       </main>
     );

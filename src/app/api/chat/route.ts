@@ -1,69 +1,79 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { runAgent } from "@/lib/agent/loop";
+import { appendEvent, openAppDb } from "@/lib/db/app";
 import { ChatRequestSchema, encodeSseEvent } from "@/lib/events";
-import { buildStubRun } from "@/lib/fixtures/stub-run";
-import { saveRunEvents } from "@/lib/fixtures/stub-store";
+import type { CaliberEvent } from "@/lib/events";
 
 /**
- * 第 1 周的桩接口：按契约顺序推送剧本事件。
+ * /api/chat —— 真 agent 入口（第 2 周起）。
  *
- * 第 2 周把 buildStubRun 换成真 agent 的事件流，本文件其余部分
- * （请求校验、SSE 编码、abort 处理、响应头）原样保留。
+ * 职责只有三件：校验请求 → 让 runAgent 干活 → 把事件流式编码返回。
+ * runAgent（loop.ts）自行管理 runId、app.db 与执行 trace；
+ * 本文件只负责补一层「把事件同时落库到 events 表」，供 /runs 回放。
  */
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const STUB_EVENT_INTERVAL_MS = 300;
+const SSE_HEADERS = {
+  "Content-Type": "text/event-stream; charset=utf-8",
+  "Cache-Control": "no-cache, no-transform",
+  Connection: "keep-alive",
+  "X-Accel-Buffering": "no",
+};
 
 export async function POST(req: NextRequest) {
   const body = ChatRequestSchema.safeParse(await req.json().catch(() => null));
   if (!body.success) {
-    return NextResponse.json(
-      { error: "请求体不合法", issues: body.error.issues },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "请求体不合法", issues: body.error.issues }, { status: 400 });
   }
-
-  const runId = `r_${crypto.randomUUID().slice(0, 8)}`;
-  const script = buildStubRun(runId);
-  // 第 2 周这里换成「边执行边落 app.db 的 events 表」，接口不变
-  saveRunEvents(runId, script);
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
+      const sentEvents: CaliberEvent[] = [];
 
-      // 客户端关页面（或 StrictMode 双发后的那次 abort）时立刻停止，
-      // 不再往已关闭的流里写
-      req.signal.addEventListener("abort", () => {
+      const enqueue = (event: CaliberEvent) => {
+        sentEvents.push(event);
+        controller.enqueue(encoder.encode(encodeSseEvent(event)));
+      };
+      const close = () => {
         try {
           controller.close();
         } catch {
-          // controller 可能已被 close，无需处理
+          // 已关闭或已 abort，竞态下忽略
         }
-      });
+      };
 
-      for (const event of script) {
-        if (req.signal.aborted) break;
-        await new Promise((r) => setTimeout(r, STUB_EVENT_INTERVAL_MS));
-        controller.enqueue(encoder.encode(encodeSseEvent(event)));
-      }
+      // 客户端关页 / StrictMode 双发后的那次 abort：立即停止推送
+      req.signal.addEventListener("abort", close);
 
       try {
-        controller.close();
-      } catch {
-        // abort 竞态：流可能已关闭
+        await runAgent({
+          question: body.data.question,
+          asOfDate: body.data.asOfDate ?? undefined,
+          emit: enqueue,
+          // loop 内部自行落 app.db 的 steps；这里不重复记 trace
+          trace: () => {},
+        });
+      } catch (err) {
+        enqueue({ type: "error", code: "LLM_ERROR", message: err instanceof Error ? err.message : String(err) });
+      } finally {
+        // 事件落库（供 /runs 历史页回放）；runId 取自 run_started
+        const runId = sentEvents.find((e) => e.type === "run_started")?.runId;
+        if (runId) {
+          const db = openAppDb();
+          try {
+            for (const e of sentEvents) appendEvent(db, runId, e);
+          } finally {
+            db.close();
+          }
+        }
+        close();
       }
     },
   });
 
-  return new NextResponse(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
-  });
+  return new NextResponse(stream, { headers: SSE_HEADERS });
 }

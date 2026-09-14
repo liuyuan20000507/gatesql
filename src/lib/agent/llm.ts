@@ -86,7 +86,8 @@ export async function callLlm(
   const client = new OpenAI({
     baseURL: env.LLM_BASE_URL,
     apiKey: env.LLM_API_KEY,
-    timeout: 30_000,
+    // 上游（火山 Coding Plan）响应通常 10-40 秒，给足余量避免可用查询被误判超时
+    timeout: 90_000,
   });
 
   // SDK 7.x 对 responses API 的 text.format 泛型覆盖不全（类型缺索引签名），

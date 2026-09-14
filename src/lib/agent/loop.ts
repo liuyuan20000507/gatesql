@@ -107,10 +107,14 @@ function extractHints(question: string): LintHints {
   };
 }
 
-/** 去掉 JSON 响应里可能裹着代码围栏的噪音，再尝试解析 */
+/** 去掉 JSON 响应里可能裹着代码围栏 / 前后散文的噪音，再尝试解析 */
 function tryParseJson<T>(text: string): T | null {
+  let candidate = text.replace(/^```(?:json)?/i, "").replace(/```$/g, "").trim();
+  // 模型偶尔会在 JSON 前/后多写一行注释或说明 —— 直接截取第一个 { ... } 块
+  const brace = candidate.match(/\{[\s\S]*\}/);
+  if (brace) candidate = brace[0];
   try {
-    return JSON.parse(text.replace(/^```(?:json)?/i, "").replace(/```$/g, "").trim()) as T;
+    return JSON.parse(candidate) as T;
   } catch {
     return null;
   }
@@ -292,7 +296,9 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         break;
       }
 
-      const sql = parsed.sql.trim();
+      // 模型常把结尾分号写进 SQL 字符串里，guard 会把带尾分号的语句判为多语句。
+      // 这是正常防御；正确修法是在入口处归一化（去尾部空白与分号），而不是放宽 guard。
+      const sql = parsed.sql.trim().replace(/;+\s*$/, "");
       deps.emit({ type: "sql_generated", attempt, sql, citedRules: [] });
       trace({
         kind: "llm_call",
@@ -455,20 +461,24 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       const content = `表结构：\n${ctx.card}\n\n查询结果（前 50 行）：\n${success.columns.join(", ")}\n` +
         success.rows.slice(0, 50).map((r) => r.join("\t")).join("\n");
 
-      try {
-        const res = await callLlm(
-          [
-            { role: "system", content: sys },
-            { role: "user", content },
-          ],
-          { jsonSchema: CHART_SCHEMA },
-        );
-        llmCalls++;
-        inputTokens += res.inputTokens;
-        outputTokens += res.outputTokens;
+      // 总结调用失败时允许自动重试一次（对偶预算：不占 repairs / execRetries）
+      for (let s = 0; s < 2 && llmCalls < 6; s++) {
+        const s0 = Date.now();
+        try {
+          const res = await callLlm(
+            [
+              { role: "system", content: sys },
+              { role: "user", content },
+            ],
+            { jsonSchema: CHART_SCHEMA },
+          );
+          llmCalls++;
+          inputTokens += res.inputTokens;
+          outputTokens += res.outputTokens;
+          trace({ kind: "llm_call", seq: attempts + 100 + s, startedAt: s0, endedAt: Date.now(), status: "ok", attributes: { stage: "summarize", prompt: sys + "\n\n" + content, completion: res.text } });
 
-        const parsed = tryParseJson<{ kind?: unknown; x?: unknown; y?: unknown; title?: unknown; summary?: unknown }>(res.text);
-        if (parsed) {
+          const parsed = tryParseJson<{ kind?: unknown; x?: unknown; y?: unknown; title?: unknown; summary?: unknown }>(res.text);
+          if (!parsed) continue; // 解析失败 → 重试一次
           const kind = (["bar", "line", "pie", "none"].includes(String(parsed.kind)) ? parsed.kind : "none") as ChartSpec["kind"];
           deps.emit({
             type: "chart",
@@ -482,9 +492,10 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
           if (typeof parsed.summary === "string" && parsed.summary) {
             deps.emit({ type: "text_delta", delta: parsed.summary });
           }
+          break; // 成功即结束
+        } catch {
+          // 超时 / 网络抖动：重试一次后放弃（数字已在表格与回执里）
         }
-      } catch {
-        // 图表/结论失败不阻断主流程：数字已经在表格与回执里了
       }
     }
   } finally {

@@ -44,16 +44,42 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
+/**
+ * 剥掉标识符两端的引号。guard 的 sqlify 重建会给标识符套反引号
+ * （SELECT `orders`.`id`），再喂回本 lint 解析时 Parser 会把这些反引号
+ * 留在 table/column 里，导致别名查表和列名比较全部落空 —— 必须归一。
+ */
+function unquote(s: string): string {
+  return s.replace(/^[`"']|[`"']$/g, "");
+}
+
 interface ColumnRef {
   table: string | null;
   column: string;
+}
+
+/**
+ * 从 column_ref 里取表名。实测 v5 在反引号标识符下会把 table 解析成
+ * { type: "backticks_quote_string", value: "o" } 这样的对象而非字符串。
+ */
+function tableNameOf(ref: Record<string, unknown>): string | null {
+  const t = ref.table;
+  if (typeof t === "string") {
+    const clean = unquote(t);
+    return clean ? clean : null;
+  }
+  if (typeof t === "object" && t !== null) {
+    const v = (t as Record<string, unknown>).value;
+    if (typeof v === "string") return v;
+  }
+  return null;
 }
 
 function collectColumnRefs(root: unknown, out: ColumnRef[]): void {
   if (Array.isArray(root)) return root.forEach((n) => collectColumnRefs(n, out));
   if (!isObject(root)) return;
   if (root.type === "column_ref" && typeof root.column === "string") {
-    out.push({ table: typeof root.table === "string" ? root.table : null, column: root.column });
+    out.push({ table: tableNameOf(root), column: unquote(root.column) });
   }
   for (const v of Object.values(root)) collectColumnRefs(v, out);
 }
@@ -94,8 +120,8 @@ function buildFromInfo(select: Record<string, unknown>): FromInfo {
       if (!isObject(raw)) continue;
       const name = raw.table;
       if (typeof name === "string") {
-        tables.add(name);
-        if (typeof raw.as === "string") aliasToTable.set(raw.as, name);
+        tables.add(unquote(name));
+        if (typeof raw.as === "string") aliasToTable.set(unquote(raw.as), unquote(name));
       }
       if (isObject(raw.on)) hasJoinCondition = true;
     }
@@ -204,7 +230,7 @@ function ruleR4(select: Record<string, unknown>): LintViolation | null {
   const grouped = columns
     .map((g) => {
       const rec = g as Record<string, unknown>;
-      return typeof rec.column === "string" ? rec.column : null;
+      return typeof rec.column === "string" ? unquote(rec.column) : null;
     })
     .filter((c): c is string => c !== null);
   const nullableGrouped = grouped.filter((c) => NULLABLE_GROUP_COLUMNS.has(c));

@@ -50,4 +50,12 @@ describe("R1 的细节：状态谓词以别名出现也认得出", () => {
     const report = lintCaliber(sql, NO_HINTS);
     expect(report.violations.map((v) => v.ruleId)).not.toContain("R1");
   });
+
+  it("guard.sqlify 重建后的反引号标识符不误报（改自真实 trace 的误报）", () => {
+    // guard 会把这句（正确 SQL，用反引号）交给 lint：
+    const sql =
+      "SELECT SUM(`oi`.`amount`) AS `total_sales` FROM `order_items` AS `oi` INNER JOIN `orders` AS `o` ON `oi`.`order_id` = `o`.`id` WHERE `o`.`status` = '已完成' LIMIT 1000";
+    const report = lintCaliber(sql, NO_HINTS);
+    expect(report.violations.map((v) => v.ruleId)).not.toContain("R1");
+  });
 });
