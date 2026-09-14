@@ -54,7 +54,9 @@ describe("app.db：结构", () => {
     const tables = (
       db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as Array<{ name: string }>
     ).map((r) => r.name);
-    expect(tables.sort()).toEqual(["corrections", "events", "reports", "runs", "steps"].sort());
+    expect(tables.sort()).toEqual(
+      ["corrections", "eval_items", "eval_runs", "events", "reports", "runs", "steps"].sort(),
+    );
   });
 });
 

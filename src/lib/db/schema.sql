@@ -58,3 +58,35 @@ CREATE TABLE IF NOT EXISTS corrections (
   verified_by_user  INTEGER DEFAULT 0,
   created_at        TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS eval_runs (
+  id                TEXT PRIMARY KEY,
+  ran_at            TEXT NOT NULL,
+  model             TEXT NOT NULL,
+  llm_mode          TEXT NOT NULL,
+  total             INTEGER NOT NULL,
+  passed            INTEGER NOT NULL,
+  accuracy          REAL NOT NULL,
+  refusal_rate      REAL NOT NULL,
+  overconfident_rate REAL NOT NULL,
+  avg_attempts      REAL NOT NULL,
+  avg_elapsed_ms    REAL NOT NULL,
+  total_input_tokens  INTEGER DEFAULT 0,
+  total_output_tokens INTEGER DEFAULT 0,
+  commit_hash       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS eval_items (
+  eval_run_id   TEXT NOT NULL,
+  question_id   TEXT NOT NULL,
+  layer         TEXT NOT NULL,
+  passed        INTEGER NOT NULL,     -- 0/1
+  agent_verdict TEXT,                 -- verified / unverified / refused / NULL(未出 state)
+  gold_expected TEXT NOT NULL,        -- answered / refused
+  attempts      INTEGER,
+  elapsed_ms    INTEGER,
+  input_tokens  INTEGER,
+  output_tokens INTEGER,
+  fail_reason   TEXT,
+  PRIMARY KEY (eval_run_id, question_id)
+);

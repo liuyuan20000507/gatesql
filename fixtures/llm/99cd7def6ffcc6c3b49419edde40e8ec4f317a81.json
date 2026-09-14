@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"数据源中不存在员工表或任何工资/薪酬相关字段。现有 4 张表（customers、products、orders、order_items）均无员工与薪资数据，无法回答该问题。\"}",
+  "inputTokens": 1100,
+  "outputTokens": 128
+}

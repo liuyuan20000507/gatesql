@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eval": "tsx scripts/eval.ts",
+    "eval:quick": "tsx scripts/eval.ts --limit 10"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

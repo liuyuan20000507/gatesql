@@ -1,0 +1,2 @@
+{"id":"A1","layer":"简单聚合","question":"数据库里一共记录了多少个客户？","goldSql":"SELECT COUNT(*) AS customer_count FROM customers","expectedVerdict":"answered","notes":"样板题：单表 COUNT，答案 500"}
+{"id":"E1","layer":"不可答","question":"员工的平均工资是多少？","expectedVerdict":"refused","notes":"样板题：数据源没有员工/薪酬表，正确行为是拒答并列出可查的表"}

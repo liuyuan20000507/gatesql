@@ -188,3 +188,80 @@ export function saveCorrection(
     input.createdAt,
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* eval_runs / eval_items（第 3 周评测体系）                            */
+/* ------------------------------------------------------------------ */
+
+export interface NewEvalRunInput {
+  id: string;
+  ranAt: string;
+  model: string;
+  llmMode: string;
+  total: number;
+  passed: number;
+  accuracy: number;
+  refusalRate: number;
+  overconfidentRate: number;
+  avgAttempts: number;
+  avgElapsedMs: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+}
+
+export function createEvalRun(db: DatabaseSync, input: NewEvalRunInput): void {
+  db.prepare(
+    `INSERT INTO eval_runs (id, ran_at, model, llm_mode, total, passed, accuracy,
+       refusal_rate, overconfident_rate, avg_attempts, avg_elapsed_ms,
+       total_input_tokens, total_output_tokens)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    input.id,
+    input.ranAt,
+    input.model,
+    input.llmMode,
+    input.total,
+    input.passed,
+    input.accuracy,
+    input.refusalRate,
+    input.overconfidentRate,
+    input.avgAttempts,
+    input.avgElapsedMs,
+    input.totalInputTokens,
+    input.totalOutputTokens,
+  );
+}
+
+export interface EvalItemInput {
+  evalRunId: string;
+  questionId: string;
+  layer: string;
+  passed: boolean;
+  agentVerdict: string | null;
+  goldExpected: "answered" | "refused";
+  attempts: number | null;
+  elapsedMs: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  failReason: string | null;
+}
+
+export function recordEvalItem(db: DatabaseSync, input: EvalItemInput): void {
+  db.prepare(
+    `INSERT INTO eval_items (eval_run_id, question_id, layer, passed, agent_verdict,
+       gold_expected, attempts, elapsed_ms, input_tokens, output_tokens, fail_reason)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    input.evalRunId,
+    input.questionId,
+    input.layer,
+    input.passed ? 1 : 0,
+    input.agentVerdict,
+    input.goldExpected,
+    input.attempts,
+    input.elapsedMs,
+    input.inputTokens,
+    input.outputTokens,
+    input.failReason,
+  );
+}
