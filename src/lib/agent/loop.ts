@@ -177,6 +177,8 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
   // —— 运行期状态（确保 finally 一定能安全收尾）——
   const seenFingerprints = new Set<string>();
   let sameFingerprintHits = 0;
+  /** 连续 SCHEMA_PARSE_FAILED 计数 —— 连续失败会有明确结局而不是烧光预算 */
+  let consecutiveParseFailures = 0;
   let attempts = 0;
   let finalStatus: string = "ok";
   let verdict: RunSummary["verdict"] = null;
@@ -279,12 +281,21 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       inputTokens += gen.inputTokens;
       outputTokens += gen.outputTokens;
 
-      // 结构化解析：失败走 SCHEMA_PARSE_FAILED 修复一次（计入 llmCalls，不计入 repairs）
+      // 结构化解析：失败走 SCHEMA_PARSE_FAILED（计入 llmCalls，不计入 repairs；
+      // 连续失败给出明确结局，而不是把预算耗光还答不明白 —— 见 consecutiveParseFailures）
       const parsed = tryParseJson<{ sql?: unknown; unanswerable?: unknown; unanswerableReason?: unknown }>(gen.text);
       if (!parsed || typeof parsed.sql !== "string" || !parsed.sql.trim()) {
         repairHistory.push({ attempt, kind: "SCHEMA_PARSE_FAILED", detail: "模型输出的 JSON 无法解析或无 sql 字段" });
+        consecutiveParseFailures++;
+        if (consecutiveParseFailures >= 3) {
+          verdict = "refused";
+          finalStatus = "SCHEMA_PARSE_FAILED";
+          verdictReasons.push("模型连续多次无法输出可解析的 SQL 结构，已终止");
+          break;
+        }
         continue;
       }
+      consecutiveParseFailures = 0;
 
       if (parsed.unanswerable === true) {
         verdict = "refused";
@@ -457,7 +468,17 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
     /* ============ 步骤 10：图表 + 结论（LLM #2，可被预算砍掉） ============ */
 
     if (success && verdict !== "refused" && llmCalls < 6) {
-      const sys = "你是数据解读助手。根据查询结果写一句定性结论（不得出现任何数字断言），并给出图表规格。";
+      const sys =
+        "你是数据解读助手。只根据查询结果说话，不引用未见的数据。\n" +
+        "【输出格式·必须严格遵守】\n" +
+        "只输出一个 JSON 对象，不要 markdown 代码围栏，不要任何解释性文字。\n" +
+        "字段定义：\n" +
+        '  kind: "bar" | "line" | "pie" | "none"，选择最适合展示这张表的图；不适合画图就 "none"\n' +
+        '  x: 横轴列的列名字符串（若为 none 则 ""）\n' +
+        '  y: 数值列的列名字符串数组（若为 none 则 []）\n' +
+        '  title: 图表标题\n' +
+        '  summary: 一句定性结论，解释数据说明了什么（重点是趋势/对比/占比，禁止出现任何数字）。\n' +
+        '示例：{"kind":"bar","x":"category","y":["sales"],"title":"分类销售额","summary":"食品生鲜领先，服饰鞋包垫底，分类间呈阶梯分布。"}';
       const content = `表结构：\n${ctx.card}\n\n查询结果（前 50 行）：\n${success.columns.join(", ")}\n` +
         success.rows.slice(0, 50).map((r) => r.join("\t")).join("\n");
 
@@ -480,14 +501,12 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
           const parsed = tryParseJson<{ kind?: unknown; x?: unknown; y?: unknown; title?: unknown; summary?: unknown }>(res.text);
           if (!parsed) continue; // 解析失败 → 重试一次
           const kind = (["bar", "line", "pie", "none"].includes(String(parsed.kind)) ? parsed.kind : "none") as ChartSpec["kind"];
+          const x = typeof parsed.x === "string" ? parsed.x : "";
+          const title = typeof parsed.title === "string" ? parsed.title : "";
+          const y = Array.isArray(parsed.y) ? parsed.y.filter((v): v is string => typeof v === "string") : [];
           deps.emit({
             type: "chart",
-            spec: {
-              kind,
-              x: String(parsed.x ?? ""),
-              y: Array.isArray(parsed.y) ? parsed.y.map(String) : [],
-              title: String(parsed.title ?? ""),
-            },
+            spec: { kind, x, y, title },
           });
           if (typeof parsed.summary === "string" && parsed.summary) {
             deps.emit({ type: "text_delta", delta: parsed.summary });
