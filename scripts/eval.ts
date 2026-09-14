@@ -20,7 +20,7 @@ import { DatabaseSync } from "node:sqlite";
 import { existsSync, readFileSync } from "node:fs";
 
 import { runAgent, type RunSummary } from "@/lib/agent/loop";
-import { createEvalRun, openAppDb, recordEvalItem } from "@/lib/db/app";
+import { createEvalRun, getEvalItemResults, getLatestEvalRun, openAppDb, recordEvalItem } from "@/lib/db/app";
 import { resultsEqual, type ResultSetLike } from "@/lib/eval/compare";
 import { getConfig } from "@/lib/env";
 import type { CaliberEvent } from "@/lib/events";
@@ -121,6 +121,15 @@ async function main() {
   console.log("=".repeat(64));
 
   const evalRunId = `eval_${new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14)}`;
+
+  // 上轮结果：在写入本轮之前读取，永远是「上一轮」
+  // （评测直连 runAgent 事件不落库，但 eval_items 落库，足以做由对转错对比）
+  const appDb = openAppDb(env.APP_DB_PATH);
+  const previousRun = getLatestEvalRun(appDb);
+  const previousResults = previousRun
+    ? new Map(getEvalItemResults(appDb, previousRun.id).map((r) => [r.questionId, r.passed]))
+    : null;
+
   const outcomes: Array<{ item: GoldItem; pass: boolean; verdict: RunSummary["verdict"]; failReason: string | null; summary: RunSummary | null }> = [];
 
   for (const item of items) {
@@ -210,6 +219,17 @@ async function main() {
 
   /* ---------------- 报告 ---------------- */
 
+  // 与上轮对比：由对转错（回归）是优化轮里最危险的信号，必须显式曝光
+  let regressionIds: string[] = [];
+  let fixedIds: string[] = [];
+  if (previousResults) {
+    for (const o of outcomes) {
+      const before = previousResults.get(o.item.id);
+      if (before === true && !o.pass) regressionIds.push(o.item.id);
+      if (before === false && o.pass) fixedIds.push(o.item.id);
+    }
+  }
+
   console.log("\n" + "=".repeat(64));
   console.log(`总准确率: ${passed}/${total} = ${(accuracy * 100).toFixed(1)}%`);
   console.log(`拒答率(仅统计可答题): ${(refusalRate * 100).toFixed(1)}%（硬上限 12%）`);
@@ -227,10 +247,14 @@ async function main() {
       console.log(`  [${o.item.id}] ${o.item.question} —— ${o.failReason}`);
     }
   }
+  if (previousRun) {
+    console.log(`\n与上轮对比（${previousRun.id}）：`);
+    console.log(`  由对转错: ${regressionIds.length > 0 ? regressionIds.join(", ") : "无"}`);
+    console.log(`  由错转对: ${fixedIds.length > 0 ? fixedIds.join(", ") : "无"}`);
+  }
 
   /* ---------------- 落库（eval_runs / eval_items） ---------------- */
 
-  const appDb = openAppDb(env.APP_DB_PATH);
   try {
     createEvalRun(appDb, {
       id: evalRunId,

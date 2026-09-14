@@ -180,9 +180,9 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 - [ ] 评测报告新增「本轮由对转错的题号清单」
   - **完成标准**：能在某一轮里**真实观察到跷跷板效应**（某层涨、另一层跌）
 - [ ] 所有错题人工归因到四类之一，写进 `eval-log.md`
-- [ ] LLM 磁盘缓存生效
+- [x] LLM 磁盘缓存生效（4A：record 模式缓存优先，实测全量重跑 0 次 API 调用）
   - **完成标准**：连续两次 `pnpm eval` 不改提示词，第二次 <60 秒且 API 调用次数为 0
-- [ ] `pnpm eval:quick`（10 题）90 秒内跑完
+- [x] `pnpm eval:quick`（10 题）90 秒内跑完（4A 后实测秒级）
 - [ ] `/runs/[id]` 可逐步回放
   - **完成标准**：能看到 schema 切片全文、每轮 prompt/completion、每次 SQL 尝试的左右 diff、各阶段耗时
 

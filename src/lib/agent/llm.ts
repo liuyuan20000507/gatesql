@@ -3,11 +3,13 @@
  *
  * 同一份基础设施、三个用途（docs/06-evaluation.md）：
  *   live      真实调用
- *   record    真实调用 + 把响应录成 cassette（fixtures/llm/<hash>.json）
+ *   record    磁盘缓存优先：键命中直接复用 cassette（0 API 调用），未命中才真调并录制
  *   replay    完全离线，从 cassette 读 —— CI 门禁 / 调优重跑 / 无 key 演示
  *
  * cassette 键 = hash(wire + model + 规范化后的 messages + jsonSchema)。
  * 必须包含 wire：换供应商却复用旧响应，「优化后提升」就是假的。
+ * record 的缓存优先意味着：连续两次跑评测，第二次零 API 调用（docs/08 第 4 周完成标准）；
+ * 提示词一变键就变，自然会 miss 并录制新响应。要强制重录同一提示词，删掉对应文件即可。
  */
 
 import { createHash } from "node:crypto";
@@ -72,12 +74,13 @@ export async function callLlm(
   const wire = pickWire(env.LLM_BASE_URL, env.LLM_WIRE);
   const key = cassetteKey(wire, env.LLM_MODEL, messages, opts.jsonSchema);
 
-  if (mode === "replay") {
+  // replay 与 record 都缓存优先；live 永远真调
+  if (mode !== "live") {
     const cached = readCassette(key);
-    if (!cached) {
+    if (cached) return { ...cached, fromCache: true };
+    if (mode === "replay") {
       throw new LlmError(`replay 模式找不到 cassette: ${key}（先以 record/live 模式跑一次生成它）`);
     }
-    return { ...cached, fromCache: true };
   }
 
   if (!env.LLM_API_KEY) {

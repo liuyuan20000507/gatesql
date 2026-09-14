@@ -265,3 +265,19 @@ export function recordEvalItem(db: DatabaseSync, input: EvalItemInput): void {
     input.failReason,
   );
 }
+
+/** 最近一次评测 run（用于「由对转错」对比；没有任何历史评测时为 null） */
+export function getLatestEvalRun(db: DatabaseSync): { id: string; ranAt: string } | null {
+  const row = db.prepare("SELECT id, ran_at FROM eval_runs ORDER BY ran_at DESC LIMIT 1").get() as
+    | { id: string; ran_at: string }
+    | undefined;
+  return row ? { id: row.id, ranAt: row.ran_at } : null;
+}
+
+/** 某一轮评测里每道题的通过情况（questionId → passed） */
+export function getEvalItemResults(db: DatabaseSync, evalRunId: string): Array<{ questionId: string; passed: boolean }> {
+  const rows = db
+    .prepare("SELECT question_id, passed FROM eval_items WHERE eval_run_id = ?")
+    .all(evalRunId) as Array<{ question_id: string; passed: number }>;
+  return rows.map((r) => ({ questionId: r.question_id, passed: r.passed === 1 }));
+}
