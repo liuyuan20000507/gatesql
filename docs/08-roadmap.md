@@ -183,7 +183,7 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 - [x] LLM 磁盘缓存生效（4A：record 模式缓存优先，实测全量重跑 0 次 API 调用）
   - **完成标准**：连续两次 `pnpm eval` 不改提示词，第二次 <60 秒且 API 调用次数为 0
 - [x] `pnpm eval:quick`（10 题）90 秒内跑完（4A 后实测秒级）
-- [x] `/runs/[id]` 可逐步回放（4G：TracePanel 读 steps 表 —— 完整 prompt/completion、各检查结论与耗时；评测 run 无 events 也能看。未做：SQL 尝试间的逐字符左右 diff，现以 attempts 面板并列展示代替，见 eval 归因记录）
+- [x] `/runs/[id]` 可逐步回放（4G：TracePanel 读 steps 表 —— 完整 prompt/completion、各检查结论与耗时；评测 run 无 events 也能看。SQL 左右 diff 已补：词级 LCS，尝试卡片上方双栏旧/新对比，浏览器实测 4 次尝试的历史 run 渲染正确）
   - **完成标准**：能看到 schema 切片全文、每轮 prompt/completion、每次 SQL 尝试的左右 diff、各阶段耗时
 
 ---
