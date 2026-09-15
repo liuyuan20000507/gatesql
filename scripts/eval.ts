@@ -220,8 +220,8 @@ async function main() {
   /* ---------------- 报告 ---------------- */
 
   // 与上轮对比：由对转错（回归）是优化轮里最危险的信号，必须显式曝光
-  let regressionIds: string[] = [];
-  let fixedIds: string[] = [];
+  const regressionIds: string[] = [];
+  const fixedIds: string[] = [];
   if (previousResults) {
     for (const o of outcomes) {
       const before = previousResults.get(o.item.id);

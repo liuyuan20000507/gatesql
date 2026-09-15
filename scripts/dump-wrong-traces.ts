@@ -11,6 +11,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 import { runAgent } from "@/lib/agent/loop";
+import type { CaliberEvent } from "@/lib/events";
 
 const DEFAULT_TARGETS = ["C3", "C4", "D2", "D4", "E4", "F1", "F3"];
 const TARGETS = process.argv.slice(2).length > 0 ? process.argv.slice(2) : DEFAULT_TARGETS;
@@ -41,7 +42,7 @@ async function main(): Promise<void> {
   for (const g of gold.filter((x) => TARGETS.includes(x.id))) {
     lines.push("=".repeat(72));
     lines.push(`[${g.id}] ${g.question}`);
-    const events = [];
+    const events: CaliberEvent[] = [];
     const summary = await runAgent({
       question: g.question,
       asOfDate: "2026-08-31",

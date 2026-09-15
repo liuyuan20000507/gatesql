@@ -153,15 +153,15 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 
 **本阶段唯一目标**：产出后续所有优化的裁判。优先级高于任何 UI 工作。
 
-- [ ] 30 题 gold SQL 全部手写完成并执行确认
-- [ ] 金额类题目（≥10 题）用第二种写法交叉验算，两种写法结果一致
-- [ ] 30 条 gold SQL 全部过一遍自己的口径规则引擎，**0 条 block 级违规**
-- [ ] gold 以「SQL + 执行结果 JSON」两份存储，结果由脚本生成而非手抄
-- [ ] 结果等价比对器 + 独立 Vitest 用例集
-  - **完成标准**：覆盖六类 —— 列名不同、列序不同、行序、浮点尾差、int/decimal、NULL vs 0 vs 空串
-- [ ] `pnpm eval` 输出 markdown 报告
+- [x] 30 题 gold SQL 全部落定并执行确认（gold.jsonl v3，check-gold 30/30 通过）
+- [ ] 金额类题目（≥10 题）用第二种写法交叉验算，两种写法结果一致（**未做** —— 锚点数字已人工核过，但逐题第二写法验算是欠账，第 6 周补）
+- [x] 30 条 gold SQL 全部过一遍自己的口径规则引擎，**0 条 block 级违规**（check-gold 输出 lint clean）
+- [ ] gold 以「SQL + 执行结果 JSON」两份存储，结果由脚本生成而非手抄（**未做** —— eval.ts 现跑现算 goldSql，等价于结果不落盘；可复现性靠 cassette+seed 保证）
+- [x] 结果等价比对器 + 独立 Vitest 用例集
+  - **完成标准**：覆盖六类 —— 列名不同、列序不同、行序、浮点尾差、int/decimal、NULL vs 0 vs 空串（20 用例）
+- [x] `pnpm eval` 输出 markdown 报告
   - **完成标准**：含总准确率、六层分层准确率、拒答率、自信错答率、平均重试次数、平均耗时、单题 token 与成本
-- [ ] `docs/eval-log.md` 第一条记录
+- [x] `docs/eval-log.md` 第一条记录
   - **完成标准**：含日期、模型名、commit hash、六个分层数字
 
 > 基线大概率在 60-75% 之间。**低不代表你做得差** —— 它是后面那条上升曲线的起点。
@@ -183,7 +183,7 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 - [x] LLM 磁盘缓存生效（4A：record 模式缓存优先，实测全量重跑 0 次 API 调用）
   - **完成标准**：连续两次 `pnpm eval` 不改提示词，第二次 <60 秒且 API 调用次数为 0
 - [x] `pnpm eval:quick`（10 题）90 秒内跑完（4A 后实测秒级）
-- [x] `/runs/[id]` 可逐步回放（4G：TracePanel 读 steps 表；评测 run 无 events 也能看追踪）
+- [x] `/runs/[id]` 可逐步回放（4G：TracePanel 读 steps 表 —— 完整 prompt/completion、各检查结论与耗时；评测 run 无 events 也能看。未做：SQL 尝试间的逐字符左右 diff，现以 attempts 面板并列展示代替，见 eval 归因记录）
   - **完成标准**：能看到 schema 切片全文、每轮 prompt/completion、每次 SQL 尝试的左右 diff、各阶段耗时
 
 ---

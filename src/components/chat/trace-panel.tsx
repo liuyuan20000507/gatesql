@@ -45,17 +45,19 @@ export function TracePanel({ steps }: { steps: StepRecord[] }) {
         执行追踪 · {steps.length} 步（模型视角：完整 prompt / 各检查结论 / 各阶段耗时）
       </summary>
       <ol className="space-y-2 border-t border-neutral-100 p-3">
-        {steps.map((s) => {
+        {steps.map((s, i) => {
           const a = s.attributes;
           const phase = attrString(a.phase) ?? attrString(a.stage);
           const prompt = attrString(a.prompt);
           const completion = attrString(a.completion);
+          const inTok = typeof a.inputTokens === "number" ? a.inputTokens : null;
+          const outTok = typeof a.outputTokens === "number" ? a.outputTokens : null;
           const violations = Array.isArray(a.violations) ? (a.violations as Array<Record<string, unknown>>) : null;
           // steps.status 记的是「检查本身是否执行成功」；SQL 被规则拦下要在 UI 上说话
           const blocked = s.kind === "lint" && !!violations?.some((v) => v.level === "block");
           const bad = s.status === "failed" || s.status === "rejected" || blocked;
           return (
-            <li key={`${s.kind}-${s.seq}`} className="rounded-md border border-neutral-200 p-2">
+            <li key={`${s.kind}-${s.seq}-${i}`} className="rounded-md border border-neutral-200 p-2">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="font-mono text-neutral-400">#{s.seq}</span>
                 <Badge variant="secondary">{KIND_LABEL[s.kind] ?? s.kind}</Badge>
@@ -64,9 +66,9 @@ export function TracePanel({ steps }: { steps: StepRecord[] }) {
                   {blocked ? "已拦截" : bad ? "拒绝/失败" : "通过"}
                 </span>
                 {s.durationMs !== null && <span className="text-neutral-400">{s.durationMs} ms</span>}
-                {typeof a.inputTokens === "number" && (
+                {inTok !== null && (
                   <span className="text-neutral-400">
-                    in {a.inputTokens} / out {a.outputTokens}
+                    in {inTok} / out {outTok}
                   </span>
                 )}
               </div>
