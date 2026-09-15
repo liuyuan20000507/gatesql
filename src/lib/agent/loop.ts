@@ -27,6 +27,7 @@ import { resolveDefaultAsOf } from "@/lib/db/schema";
 import { getConfig } from "@/lib/env";
 import type { CaliberEvent, ChartSpec } from "@/lib/events";
 import { explainCost } from "@/lib/sql/explain";
+import { buildEmptyResultProbes } from "@/lib/sql/probe";
 import { QueryTimeoutError, SqlExecutor } from "@/lib/sql/executor";
 import { guardSql } from "@/lib/sql/guard";
 import { buildReceipt } from "@/lib/sql/receipt";
@@ -503,9 +504,16 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
 
     if (success) {
       const checks: Array<{ kind: "empty_result" | "suspicious_shape" | "data_watermark" | "magnitude"; passed: boolean; detail: string }> = [];
+      // 聚合对空集返回「一行 NULL」而不是 0 行 —— 两种形态都算空（docs/05 步骤 8(b)）
+      const emptyAggregate = success.rows.length === 1 && success.rows[0].every((v) => v === null);
       if (success.rows.length === 0) {
         finalStatus = "EMPTY_RESULT";
         checks.push({ kind: "empty_result", passed: false, detail: "查询返回 0 行" });
+      } else if (emptyAggregate) {
+        checks.push({ kind: "empty_result", passed: true, detail: "结果非空" });
+        checks.push({ kind: "suspicious_shape", passed: false, detail: "聚合结果为单个 NULL：范围内 0 行，聚合建立在空集上" });
+        warnSeen = true; // 单个 NULL 的「0」绝不能以已核验姿态交付
+        verdictReasons.push("聚合建立在空集上：本范围内没有匹配数据，数字（NULL/0）不代表业务为零");
       } else {
         checks.push({ kind: "empty_result", passed: true, detail: "结果非空" });
       }
@@ -514,8 +522,38 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       } else {
         checks.push({ kind: "suspicious_shape", passed: true, detail: "未见截断" });
       }
+      // 5E：空结果归因探针 —— 每次只放宽一类条件重跑 COUNT（代码生成，≤4 条），
+      // 第一个「放宽后就有数据」的条件类即元凶；全部放宽仍为 0 就如实说没有数据
+      let emptyReason: { suspectCondition: string; countIfRelaxed: number } | undefined;
+      if ((success.rows.length === 0 || emptyAggregate) && lastSql) {
+        for (const probe of buildEmptyResultProbes(lastSql)) {
+          try {
+            const r = await executor.execute(probe.sql);
+            const n = Number(r.rows[0]?.[0] ?? 0);
+            if (n > 0) {
+              emptyReason = { suspectCondition: probe.label, countIfRelaxed: n };
+              break;
+            }
+            if (probe.label === "全部过滤条件") {
+              emptyReason = { suspectCondition: probe.label, countIfRelaxed: 0 };
+            }
+          } catch {
+            // 探针自身失败：放弃归因，不编原因
+          }
+        }
+        if (emptyReason && emptyReason.countIfRelaxed > 0) {
+          verdictReasons.push(
+            `该口径下没有数据；单独放宽「${emptyReason.suspectCondition}」后可见 ${emptyReason.countIfRelaxed} 行`,
+          );
+        }
+      }
       // 5D：窗口越过数据水位线 → 末点不完整标记（纯代码判定，前端画虚线+横幅）
-      deps.emit({ type: "verification", checks, incompletePeriod: detectIncompletePeriod(resolution, asOf) ?? undefined });
+      deps.emit({
+        type: "verification",
+        checks,
+        emptyReason,
+        incompletePeriod: detectIncompletePeriod(resolution, asOf) ?? undefined,
+      });
     }
 
     /* ============ 步骤 9：三态判定 + 回执（不调 LLM） ============ */
