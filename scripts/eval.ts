@@ -23,6 +23,7 @@ import { runAgent, type RunSummary } from "@/lib/agent/loop";
 import { createEvalRun, getEvalItemResults, getLatestEvalRun, openAppDb, recordEvalItem } from "@/lib/db/app";
 import { resultsEqual, type ResultSetLike } from "@/lib/eval/compare";
 import { getConfig } from "@/lib/env";
+import { lintCaliber } from "@/lib/sql/lint";
 import type { CaliberEvent } from "@/lib/events";
 
 /**
@@ -174,6 +175,12 @@ async function main() {
 
   const outcomes: Array<{ item: GoldItem; pass: boolean; verdict: RunSummary["verdict"]; failReason: string | null; summary: RunSummary | null }> = [];
 
+  // 5F 规则误报率样本：结果「本来正确」的 SQL —— 全部 gold + agent 答对的最终 SQL。
+  // 任何 block 级命中都是误报（gold 不过 lint 是出题问题，agent 答对却被拦是规则问题）。
+  // R6/R7 依赖问题侧提示词，不在此统计（eval 里按无提示词口径跑）。
+  const goldSqls: string[] = [];
+  const agentCorrectSqls: string[] = [];
+
   for (const item of items) {
     process.stdout.write(`[${item.id}] ${item.question} …… `);
     let failReason: string | null = null;
@@ -206,6 +213,7 @@ async function main() {
           outcomes.push({ item, pass: false, verdict, failReason, summary });
         } else {
           const goldResult = executeGold(item.goldSql!, env.SHOP_DB_PATH);
+          goldSqls.push(item.goldSql!);
           // 行序只在「排行榜」题（ORDER BY + LIMIT）校验 —— 名次即语义。
           // 普通分组题每行自带键（月份/分类/渠道），行序是展示问题，基线 #1 实测
           // 3 道题（C4/D2/D4）因 agent 没排序被误判，数字本身全对。
@@ -213,6 +221,8 @@ async function main() {
           const cmp = resultsEqual(goldResult, agentResult, { ordered });
           if (cmp.equal) {
             process.stdout.write("✓ 与 gold 等价\n");
+            const lastSqlEvent = [...events].reverse().find((e) => e.type === "sql_generated");
+            if (lastSqlEvent && lastSqlEvent.type === "sql_generated") agentCorrectSqls.push(lastSqlEvent.sql);
             outcomes.push({ item, pass: true, verdict, failReason: null, summary });
           } else {
             failReason = cmp.reason ?? "结果不等价";
@@ -293,6 +303,27 @@ async function main() {
     console.log(`\n与上轮对比（${previousRun.id}）：`);
     console.log(`  由对转错: ${regressionIds.length > 0 ? regressionIds.join(", ") : "无"}`);
     console.log(`  由错转对: ${fixedIds.length > 0 ? fixedIds.join(", ") : "无"}`);
+  }
+
+  /* ---------------- 规则误报率（5F） ---------------- */
+
+  const correctSet = [...goldSqls, ...agentCorrectSqls];
+  const fpBlocks = new Map<string, number>();
+  for (const sql of correctSet) {
+    const rep = lintCaliber(sql); // 无提示词口径（R6/R7 不在此列）
+    for (const v of rep.violations) {
+      if (v.level === "block") fpBlocks.set(v.ruleId, (fpBlocks.get(v.ruleId) ?? 0) + 1);
+    }
+  }
+  if (correctSet.length > 0) {
+    console.log(`\n规则误报率（样本 = ${correctSet.length} 条「结果正确」的 SQL：gold + 答对的最终 SQL）：`);
+    if (fpBlocks.size === 0) {
+      console.log("  全部 block 级规则 0 误报");
+    }
+    for (const [rule, n] of fpBlocks) {
+      const rate = (n / correctSet.length) * 100;
+      console.log(`  ${rule}: ${n} 次 = ${rate.toFixed(1)}%${rate > 5 ? "  ← 超 5% 红线，建议降级 warn 或删除" : ""}`);
+    }
   }
 
   /* ---------------- 落库（eval_runs / eval_items） ---------------- */
