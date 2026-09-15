@@ -1,0 +1,5 @@
+{
+  "text": "## 审计结论：pass ✅\n\n逐项核对如下：\n\n**① 是否回答了问题（列、聚合粒度、范围）**\n- 输出列为 `category` 和 `sales_amount`，与问题要求「各商品分类的销售额」一一对应；\n- `GROUP BY p.category` 粒度正确（按分类聚合）；\n- `ORDER BY sales_amount DESC LIMIT 1000` 只是安全排序上限，分类枚举仅 5 个值，不会截断结果。\n\n**② 金额是否只算已完成订单**\n- `WHERE o.status = '已完成'` 已正确过滤，排除了已取消和已退款订单，符合表结构注释中的口径要求。\n\n**③ 毛利类是否用成交价 unit_price**\n- 本题为销售额口径，不涉及毛利。使用的是 `oi.amount`（= quantity × 成交单价 unit_price），即实际成交金额，而非 `products.price` 标准售价，口径正确（避免高估促销订单的销售额）。\n\n**④ 订单计数是否去重**\n- 本题是金额求和而非订单计数，不存在 COUNT 去重问题；`order_items` 是事实表，`SUM(oi.amount)` 按明细行汇总不会重复计数。\n\n**⑤ 时间边界是否覆盖题意**\n- 问题未限定时间范围，SQL 未加时间条件是正确的；`created_at` 仅作关联字段存在，无遗漏。\n\n**结论**：候选 SQL 在列选择、过滤条件、聚合口径上均无问题，**无需修改**。",
+  "inputTokens": 576,
+  "outputTokens": 791
+}

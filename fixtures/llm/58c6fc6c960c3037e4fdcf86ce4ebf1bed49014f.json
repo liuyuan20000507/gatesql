@@ -1,0 +1,5 @@
+{
+  "text": "**结论：pass** ✅\n\n逐项核对：\n\n**① 是否回答了问题**\n- 问题要求“各分类的毛利”，SQL 按 `p.category` 分组，输出分类和毛利列，粒度正确。\n- 毛利公式 `(unit_price - cost) * quantity` 按单品计算后 SUM 聚合，符合“销量 × 单件毛利”的口径。\n- JOIN 关系为 `order_items → orders`（多对一）、`order_items → products`（多对一），不会产生行扩散导致重复计算。\n\n**② 金额是否只算已完成订单**\n- `WHERE o.status = '已完成'` 已正确过滤 ✓\n\n**③ 毛利是否用成交价**\n- 使用的是 `oi.unit_price`（成交价）而非 `p.price`（标准售价），符合口径要求 ✓\n\n**④ 计数是否去重**\n- 本查询为 SUM 聚合，无订单计数需求，不涉及去重问题 ✓\n\n**⑤ 时间边界**\n- 问题未限定时间范围，无需时间过滤，不算缺失 ✓\n\n**其他**\n- `LIMIT 1000`：分类仅 5 个枚举值，不会截断结果；`ORDER BY gross_profit DESC` 为合理排序呈现，无碍。\n\n无遗漏、无口径错误、无行扩散风险，该 SQL 通过审计。",
+  "inputTokens": 340,
+  "outputTokens": 742
+}

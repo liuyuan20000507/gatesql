@@ -81,6 +81,16 @@ const CHART_SCHEMA = {
   required: ["kind", "x", "y", "title", "summary"],
 } as const;
 
+/** 自检审计员（SELF_CHECK=on 时才调用）：只报疑、不直接改 SQL */
+const SELF_CHECK_SCHEMA = {
+  type: "object",
+  properties: {
+    verdict: { type: "string", enum: ["pass", "revise"] },
+    reason: { type: "string", description: "verdict=revise 时的具体疑点，指明错在哪个子句" },
+  },
+  required: ["verdict", "reason"],
+} as const;
+
 /* ------------------------------------------------------------------ */
 /* 轻量工具                                                            */
 /* ------------------------------------------------------------------ */
@@ -179,6 +189,8 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
   let sameFingerprintHits = 0;
   /** 连续 SCHEMA_PARSE_FAILED 计数 —— 连续失败会有明确结局而不是烧光预算 */
   let consecutiveParseFailures = 0;
+  /** 自检审计每次运行最多一次（SELF_CHECK=on），防「审计→重写→再审计」成本放大 */
+  let selfCheckUsed = false;
   /** 最近一次模型原始回复（结构化解析失败时用来给用户一个可读的说明） */
   let lastModelText = "";
   let attempts = 0;
@@ -417,6 +429,54 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         finalStatus = "COST_REJECTED";
         deps.emit({ type: "error", code: "COST_REJECTED", message: "查询代价超出安全范围", detail: cost.reason });
         break;
+      }
+
+      // —— 步骤 6.5：自检审计（A/B 开关 SELF_CHECK，默认 off；docs/08 第 4 周）——
+      // 设计：审计员只报疑、不直接改 SQL —— 疑点走既有修复通道（repairs 预算 + 回喂重生成），
+      // 架构上不多开一条「第二生成路径」。每次运行最多审计一次，预算不足时降级未核验放行。
+      if (env.SELF_CHECK === "on" && !selfCheckUsed) {
+        selfCheckUsed = true;
+        const scSystem = [
+          "你是 SQL 审计员。给定用户问题、表结构和一条已通过安全与口径检查的候选 SQL，",
+          "逐项核对：①是否真的回答了问题（列、聚合粒度、范围）；②金额是否只算已完成订单；",
+          "③毛利类是否用成交价 unit_price；④订单计数是否去重；⑤时间边界是否覆盖题意。",
+          "拿不准就报 revise 并指明错在哪个子句；没有疑点就报 pass，不得为了挑刺而编造问题。",
+        ].join("\n");
+        const scUser = `问题：${question}\n候选 SQL：${guard.sql}\n表结构：\n${ctx.card}`;
+        const sc = await callLlm(
+          [
+            { role: "system", content: scSystem },
+            { role: "user", content: scUser },
+          ],
+          { jsonSchema: SELF_CHECK_SCHEMA },
+        );
+        llmCalls++;
+        inputTokens += sc.inputTokens;
+        outputTokens += sc.outputTokens;
+        trace({
+          kind: "llm_call",
+          seq: attempt,
+          startedAt: t0,
+          endedAt: Date.now(),
+          status: "ok",
+          attributes: {
+            phase: "self_check",
+            prompt: scSystem + "\n\n" + scUser,
+            completion: sc.text,
+            inputTokens: sc.inputTokens,
+            outputTokens: sc.outputTokens,
+          },
+        });
+        const finding = tryParseJson<{ verdict?: unknown; reason?: unknown }>(sc.text);
+        if (finding && finding.verdict === "revise") {
+          const reason = typeof finding.reason === "string" && finding.reason ? finding.reason : "审计发现疑点";
+          if (budgets.repairs > 0) {
+            budgets.repairs--;
+            repairHistory.push({ attempt, kind: "SELF_CHECK_FINDING", detail: reason });
+            continue; // 回到生成步骤，模型带着审计意见重写（重写产物重新过 guard/lint/EQP）
+          }
+          warnSeen = true; // 预算耗尽：不重试，但如实降级为未核验
+        }
       }
 
       // —— 步骤 7：只读执行（worker 隔离 + 超时放弃，不依赖 terminate）——

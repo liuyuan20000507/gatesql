@@ -1,0 +1,5 @@
+{
+  "text": "**审计结论：pass**\n\n逐项核对：\n\n**① 回答了问题（列、聚合粒度、范围）** ✓\n- 问题要“销量排行榜”，SQL 输出 `product_name` + `total_quantity`（SUM(quantity)），销量 = 售出总件数，口径正确；\n- `GROUP BY p.id, p.name` 按商品维度聚合，粒度正确，且同时按 id 分组可避免重名商品被错误合并；\n- `ORDER BY total_quantity DESC LIMIT 10` 给出前 10 名，符合“排行榜”的常见预期；\n- 关联链路 `order_items → orders → products` 完整且连接键正确。\n\n**② 金额是否只算已完成订单** ✓（本题虽只算数量不涉及金额，但）`WHERE o.status = '已完成'` 已过滤，销量统计口径同样只基于已完成订单，正确。\n\n**③ 毛利类是否用成交价 unit_price** ✓ 本题不涉及金额/毛利计算，无此风险点。若后续要算销售额，应基于 `oi.quantity × oi.unit_price`（order_items.amount），而非 products.price——候选 SQL 未引入该问题。\n\n**④ 订单计数是否去重** ✓ 本题是 SUM(quantity) 而非 COUNT 订单数，不存在重复计数订单的问题；不同明细行各自计入其数量是预期行为。\n\n**⑤ 时间边界** ✓ 问题未限定时间范围，SQL 未加时间过滤，符合题意，无边界错误。\n\n无任何疑点，该 SQL 可直接执行。",
+  "inputTokens": 453,
+  "outputTokens": 881
+}
