@@ -7,7 +7,7 @@ import { ReceiptCard } from "@/components/chat/receipt-card";
 import { ResultTable } from "@/components/chat/result-table";
 import { SqlAttemptsPanel } from "@/components/chat/sql-attempts-panel";
 import { StatusBar } from "@/components/chat/status-bar";
-import { Badge } from "@/components/ui/badge";
+import { VerdictPanel } from "@/components/chat/verdict-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CaliberEvent } from "@/lib/events";
@@ -59,7 +59,7 @@ export default function Home() {
     <main className="mx-auto min-h-dvh max-w-3xl px-4 py-8">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Caliber</h1>
-        <p className="text-sm text-neutral-500">会对错口径说「不」的取数 agent（第 1 周：界面为真，数据为剧本）</p>
+        <p className="text-sm text-neutral-500">会对错口径说不的取数 agent —— 已核验 / 未核验 / 拒答，三态交付</p>
       </header>
 
       <form
@@ -93,27 +93,15 @@ export default function Home() {
             </div>
           )}
 
-          {state.verdict === "refused" && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
-              <div className="mb-2"><Badge variant="destructive">已拒答</Badge></div>
-              <ul className="mb-2 list-disc pl-5 text-xs text-red-800">
-                {state.verdictReasons.map((r) => (
-                  <li key={r}>{r}</li>
-                ))}
-              </ul>
-              {state.clarifications.map((c) => (
-                <button
-                  key={c.label}
-                  type="button"
-                  onClick={() => setInput(c.label)}
-                  className="mr-2 rounded border border-red-300 bg-white px-2 py-1 text-xs hover:bg-red-50"
-                  title={c.description}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          )}
+          <VerdictPanel
+            verdict={state.verdict}
+            reasons={state.verdictReasons}
+            clarifications={state.clarifications}
+            onClarify={(q) => {
+              setInput(q);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
 
           {state.result && <ResultTable table={state.result} />}
 

@@ -6,7 +6,7 @@ import { ResultTable } from "@/components/chat/result-table";
 import { SqlAttemptsPanel } from "@/components/chat/sql-attempts-panel";
 import { StatusBar } from "@/components/chat/status-bar";
 import { TracePanel } from "@/components/chat/trace-panel";
-import { Badge } from "@/components/ui/badge";
+import { VerdictPanel } from "@/components/chat/verdict-panel";
 import { getEventsForRun, getStepsForRun, openAppDb } from "@/lib/db/app";
 import { reduceEvents } from "@/lib/reduce-events";
 
@@ -76,16 +76,14 @@ export default async function RunDetailPage({ params }: PageProps<"/runs/[id]">)
 
         {state.attempts.length > 0 && <SqlAttemptsPanel attempts={state.attempts} />}
 
-        {state.verdict === "refused" && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
-            <div className="mb-2"><Badge variant="destructive">已拒答</Badge></div>
-            <ul className="list-disc pl-5 text-xs text-red-800">
-              {state.verdictReasons.map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {state.verdict === "refused" ||
+        (state.verdict === "unverified" && state.verdictReasons.length > 0) ? (
+          <VerdictPanel
+            verdict={state.verdict}
+            reasons={state.verdictReasons}
+            clarifications={state.clarifications}
+          />
+        ) : null}
 
         {state.result && <ResultTable table={state.result} />}
 
