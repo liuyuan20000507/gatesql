@@ -59,6 +59,43 @@ function loadGold(): GoldItem[] {
     .map((line) => JSON.parse(line) as GoldItem);
 }
 
+/**
+ * gold 结果快照（scripts/build-gold-results.ts 生成）。存在则用于漂移检测：
+ * 现算 gold 与快照不等 = 数据库被重新生成过或 gold SQL 改过没重录 ——
+ * 这属于评测地基被动过，必须炸，不能安静地拿错基准打分。
+ */
+function loadGoldSnapshot(): Map<string, ResultSetLike> {
+  const map = new Map<string, ResultSetLike>();
+  const file = "fixtures/evalset/gold_results.jsonl";
+  if (!existsSync(file)) return map;
+  for (const line of readFileSync(file, "utf-8").split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const r = JSON.parse(line) as { id: string } & ResultSetLike;
+    map.set(r.id, { columns: r.columns, rows: r.rows });
+  }
+  return map;
+}
+
+/**
+ * 预检：烧 token 之前把全部 goldSql 与快照对一遍。
+ * 漂移 = 题集/数据库地基被动过，整场评测立即中止 ——
+ * 绝不能降级成「某题失败」继续跑（那会把地基问题记进 agent 的成绩里）。
+ */
+function preflightGoldDrift(items: GoldItem[], snapshot: Map<string, ResultSetLike>, dbPath: string): void {
+  for (const item of items) {
+    if (!item.goldSql) continue;
+    const stored = snapshot.get(item.id);
+    if (!stored) continue;
+    const fresh = executeGold(item.goldSql, dbPath);
+    if (!resultsEqual(stored, fresh, { ordered: false }).equal) {
+      throw new Error(
+        `gold 结果与快照漂移（${item.id}）：数据库被重新生成过或 goldSql 改过未重录。` +
+          `确认改动有意后运行 pnpm tsx scripts/build-gold-results.ts 更新快照，再重跑评测。`,
+      );
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* gold 执行（app 层可信查询：独立只读连接，不走 guard/agent 链路）       */
 /* ------------------------------------------------------------------ */
@@ -113,11 +150,16 @@ async function main() {
   const limit = limitArg > -1 ? Number(process.argv[limitArg + 1]) : undefined;
 
   const gold = loadGold();
+  const goldSnapshot = loadGoldSnapshot();
   const items = limit ? gold.slice(0, limit) : gold;
   const mode = process.env.LLM_MODE;
   const asOf = env.AS_OF_DATE ?? "2026-08-31";
 
   console.log(`评测开始：${items.length} 题 | 模型 ${env.LLM_MODEL} | 模式 ${mode} | 时钟 ${asOf}`);
+  if (goldSnapshot.size > 0) {
+    preflightGoldDrift(items, goldSnapshot, env.SHOP_DB_PATH); // 漂移 → 未调任何 LLM 就中止
+    console.log(`gold 快照预检通过（${goldSnapshot.size} 题结果与当前数据库一致）`);
+  }
   console.log("=".repeat(64));
 
   const evalRunId = `eval_${new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14)}`;
