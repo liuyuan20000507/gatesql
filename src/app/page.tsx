@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 import { ChartPanel } from "@/components/chat/chart-panel";
+import { IncompleteBanner } from "@/components/chat/incomplete-banner";
 import { ReceiptCard } from "@/components/chat/receipt-card";
 import { ResultTable } from "@/components/chat/result-table";
 import { SqlAttemptsPanel } from "@/components/chat/sql-attempts-panel";
@@ -103,10 +104,16 @@ export default function Home() {
             }}
           />
 
+          {state.result && <IncompleteBanner period={state.verification?.incompletePeriod} />}
+
           {state.result && <ResultTable table={state.result} />}
 
           {state.chart && state.result && (
-            <ChartPanel spec={state.chart} table={state.result} />
+            <ChartPanel
+              spec={state.chart}
+              table={state.result}
+              incompletePeriod={state.verification?.incompletePeriod ?? undefined}
+            />
           )}
 
           {state.summaryText && (

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ChartPanel } from "@/components/chat/chart-panel";
+import { IncompleteBanner } from "@/components/chat/incomplete-banner";
 import { ReceiptCard } from "@/components/chat/receipt-card";
 import { ResultTable } from "@/components/chat/result-table";
 import { SqlAttemptsPanel } from "@/components/chat/sql-attempts-panel";
@@ -85,9 +86,17 @@ export default async function RunDetailPage({ params }: PageProps<"/runs/[id]">)
           />
         ) : null}
 
+        {state.result && <IncompleteBanner period={state.verification?.incompletePeriod} />}
+
         {state.result && <ResultTable table={state.result} />}
 
-        {state.chart && state.result && <ChartPanel spec={state.chart} table={state.result} />}
+        {state.chart && state.result && (
+          <ChartPanel
+            spec={state.chart}
+            table={state.result}
+            incompletePeriod={state.verification?.incompletePeriod ?? undefined}
+          />
+        )}
 
         {state.summaryText && <p className="text-sm leading-relaxed">{state.summaryText}</p>}
 

@@ -21,6 +21,7 @@ import { findAmbiguity, formatClarifyReason } from "@/lib/agent/clarify";
 import { formatFewshotExamples, retrieveFewshots } from "@/lib/agent/fewshot";
 import { buildSchemaContext } from "@/lib/agent/schema-context";
 import { resolveTimeRange } from "@/lib/agent/time";
+import { detectIncompletePeriod } from "@/lib/agent/period";
 import { createRun, finishRun, insertStep, openAppDb, type NewStepInput } from "@/lib/db/app";
 import { resolveDefaultAsOf } from "@/lib/db/schema";
 import { getConfig } from "@/lib/env";
@@ -513,7 +514,8 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       } else {
         checks.push({ kind: "suspicious_shape", passed: true, detail: "未见截断" });
       }
-      deps.emit({ type: "verification", checks });
+      // 5D：窗口越过数据水位线 → 末点不完整标记（纯代码判定，前端画虚线+横幅）
+      deps.emit({ type: "verification", checks, incompletePeriod: detectIncompletePeriod(resolution, asOf) ?? undefined });
     }
 
     /* ============ 步骤 9：三态判定 + 回执（不调 LLM） ============ */
