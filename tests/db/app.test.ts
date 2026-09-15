@@ -12,6 +12,7 @@ import {
   createRun,
   finishRun,
   getEventsForRun,
+  getStepsForRun,
   insertStep,
   listRuns,
   openAppDb,
@@ -95,6 +96,19 @@ describe("app.db：run + step + event 闭环", () => {
     const rows = db.prepare("SELECT * FROM steps WHERE run_id = ?").all("r_2") as Array<{ attributes: string }>;
     const attrs = JSON.parse(rows[0].attributes);
     expect(attrs.prompt).toBe("完整 prompt 原文");
+  });
+
+  it("getStepsForRun：按 seq 升序 + attributes 解析 + 耗时计算（4G 追踪面板数据源）", () => {
+    const { db } = freshDb();
+    createRun(db, { id: "r_9", question: "q", asOfDate: "2026-08-31", llmMode: "replay", createdAt: "2026-09-15T00:00:00.000Z" });
+    insertStep(db, { runId: "r_9", seq: 2, kind: "lint", startedAt: 500, endedAt: 520, status: "ok", attributes: { violations: [{ ruleId: "R1", level: "block", missingPredicate: "x", suggestion: "y" }] } });
+    insertStep(db, { runId: "r_9", seq: 1, kind: "guard", startedAt: 100, status: "failed", attributes: { detail: "多语句" } });
+    const steps = getStepsForRun(db, "r_9");
+    expect(steps.map((s) => s.seq)).toEqual([1, 2]); // seq 升序
+    expect(steps[0].durationMs).toBeNull(); // 只有 startedAt
+    expect(steps[1].durationMs).toBe(20);
+    expect((steps[1].attributes.violations as Array<{ ruleId: string }>)[0].ruleId).toBe("R1");
+    expect(getStepsForRun(db, "r_nobody")).toEqual([]); // 评测 run 无 events 但有 steps 的对称面：无记录时为空
   });
 
   it("事件回放 roundtrip：原样还原 CaliberEvent", () => {

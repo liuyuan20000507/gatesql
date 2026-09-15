@@ -5,8 +5,9 @@ import { ReceiptCard } from "@/components/chat/receipt-card";
 import { ResultTable } from "@/components/chat/result-table";
 import { SqlAttemptsPanel } from "@/components/chat/sql-attempts-panel";
 import { StatusBar } from "@/components/chat/status-bar";
+import { TracePanel } from "@/components/chat/trace-panel";
 import { Badge } from "@/components/ui/badge";
-import { getEventsForRun, openAppDb } from "@/lib/db/app";
+import { getEventsForRun, getStepsForRun, openAppDb } from "@/lib/db/app";
 import { reduceEvents } from "@/lib/reduce-events";
 
 /**
@@ -24,13 +25,17 @@ export default async function RunDetailPage({ params }: PageProps<"/runs/[id]">)
 
   const db = openAppDb();
   let events;
+  let steps;
   try {
     events = getEventsForRun(db, id);
+    steps = getStepsForRun(db, id);
   } finally {
     db.close();
   }
 
-  if (events.length === 0) {
+  // 评测跑出的 run 只有 steps 没有 events（事件在聊天路由落库）——
+  // 两者都为空才算「找不到记录」，否则追踪面板对用户仍然可用
+  if (events.length === 0 && steps.length === 0) {
     return (
       <main className="mx-auto min-h-dvh max-w-3xl px-4 py-8">
         <Link href="/" className="text-sm text-neutral-500 hover:underline">
@@ -62,6 +67,11 @@ export default async function RunDetailPage({ params }: PageProps<"/runs/[id]">)
       </header>
 
       <div className="space-y-4">
+        {events.length === 0 && (
+          <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-500">
+            这条记录来自评测脚本（不经聊天路由，无 SSE 事件），只展示执行追踪。
+          </p>
+        )}
         <StatusBar phase={state.phase} timeDisplay={state.timeDisplay} verdict={state.verdict} />
 
         {state.attempts.length > 0 && <SqlAttemptsPanel attempts={state.attempts} />}
@@ -92,6 +102,8 @@ export default async function RunDetailPage({ params }: PageProps<"/runs/[id]">)
             {state.stats.elapsedMs} ms
           </p>
         )}
+
+        <TracePanel steps={steps} />
       </div>
     </main>
   );

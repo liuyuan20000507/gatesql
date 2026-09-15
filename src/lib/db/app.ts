@@ -138,9 +138,7 @@ export function insertStep(db: DatabaseSync, input: NewStepInput): void {
 
 /* ------------------------------------------------------------------ */
 /* events（SSE 事件的持久化副本 → /runs 回放的唯一数据源）               */
-/* ------------------------------------------------------------------ */
-
-export function appendEvent(db: DatabaseSync, runId: string, event: CaliberEvent): void {
+/* ------------------------------------------------------------------ */export function appendEvent(db: DatabaseSync, runId: string, event: CaliberEvent): void {
   const last = db
     .prepare("SELECT COALESCE(MAX(seq), 0) AS n FROM events WHERE run_id = ?")
     .get(runId) as { n: number };
@@ -157,6 +155,39 @@ export function getEventsForRun(db: DatabaseSync, runId: string): CaliberEvent[]
     .prepare("SELECT payload FROM events WHERE run_id = ? ORDER BY seq")
     .all(runId) as Array<{ payload: string }>;
   return rows.map((r) => JSON.parse(r.payload) as CaliberEvent);
+}
+
+/* ------------------------------------------------------------------ */
+/* steps 读取（4G：/runs/[id] 执行追踪面板 —— 模型视角的原始记录）        */
+/* ------------------------------------------------------------------ */
+
+export interface StepRecord {
+  seq: number;
+  kind: string;
+  status: string;
+  durationMs: number | null;
+  attributes: Record<string, unknown>;
+}
+
+/** 按 seq 升序返回一次 run 的全部步骤，attributes 已解析为对象 */
+export function getStepsForRun(db: DatabaseSync, runId: string): StepRecord[] {
+  const rows = db
+    .prepare("SELECT seq, kind, status, started_at, ended_at, attributes FROM steps WHERE run_id = ? ORDER BY seq")
+    .all(runId) as Array<{
+    seq: number;
+    kind: string;
+    status: string;
+    started_at: number | null;
+    ended_at: number | null;
+    attributes: string;
+  }>;
+  return rows.map((r) => ({
+    seq: r.seq,
+    kind: r.kind,
+    status: r.status,
+    durationMs: r.started_at !== null && r.ended_at !== null ? r.ended_at - r.started_at : null,
+    attributes: JSON.parse(r.attributes) as Record<string, unknown>,
+  }));
 }
 
 /* ------------------------------------------------------------------ */
