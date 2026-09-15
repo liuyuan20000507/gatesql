@@ -22,6 +22,8 @@ const EnvSchema = z.object({
   MAX_ROWS: z.coerce.number().int().positive().default(1000),
   /** 上下文工程 A/B 开关（docs/08 第 4 周）：off 时 schema 卡片不注入低基数列枚举值 */
   ENUM_INJECTION: z.enum(["on", "off"]).default("on"),
+  /** 上下文工程 A/B 开关（docs/08 第 4 周）：off 时生成提示词不注入 R1-R8 口径规则文本 */
+  RULES_INJECTION: z.enum(["on", "off"]).default("on"),
 });
 
 export type EnvConfig = z.infer<typeof EnvSchema>;

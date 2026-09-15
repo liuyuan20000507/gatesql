@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"pie\",\"x\":\"channel\",\"y\":[\"order_count\"],\"title\":\"各渠道订单量占比\",\"summary\":\"未记录渠道信息的订单占比最高，APP与小程序紧随其后，三个来源分布接近均衡，渠道数据完整性存在缺失。\"}",
+  "inputTokens": 476,
+  "outputTokens": 330
+}

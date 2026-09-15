@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT p.category AS category, SUM(oi.amount) AS sales FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN products p ON p.id = oi.product_id WHERE o.status = '已完成' GROUP BY p.category ORDER BY sales DESC\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 620,
+  "outputTokens": 239
+}

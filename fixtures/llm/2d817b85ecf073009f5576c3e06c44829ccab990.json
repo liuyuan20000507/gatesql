@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"数据源中没有员工表或工资相关字段。现有表仅包含客户、商品、订单和订单明细数据，无法回答员工平均工资的问题。\"}",
+  "inputTokens": 727,
+  "outputTokens": 111
+}

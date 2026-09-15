@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT c.level AS level, SUM(oi.amount) / COUNT(DISTINCT o.id) AS avg_order_value FROM orders o JOIN customers c ON o.customer_id = c.id JOIN order_items oi ON oi.order_id = o.id WHERE o.status = '已完成' GROUP BY c.level ORDER BY avg_order_value DESC\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 660,
+  "outputTokens": 408
+}

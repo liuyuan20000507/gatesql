@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"category\",\"y\":[\"sales\"],\"title\":\"各商品分类销售额\",\"summary\":\"食品生鲜销售额领先，服饰鞋包垫底，各分类呈阶梯式分布。\"}",
+  "inputTokens": 607,
+  "outputTokens": 169
+}

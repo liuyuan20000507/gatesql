@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"orders 表中不存在订单金额字段（仅有 id、customer_id、created_at、status、channel），无法计算销售额\"}",
+  "inputTokens": 424,
+  "outputTokens": 253
+}

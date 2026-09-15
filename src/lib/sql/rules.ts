@@ -13,6 +13,8 @@
  */
 
 import { z } from "zod";
+
+import { getConfig } from "@/lib/env";
 import type { RuleId } from "@/lib/events";
 
 /** 严重级别：block = 不执行、回喂重生成；warn = 继续执行但答案降级「未核验」 */
@@ -146,5 +148,8 @@ export const RULES_BY_ID: ReadonlyMap<RuleId, CaliberRule> = new Map(
 
 /** 注入提示词的紧凑中文清单（合计应 < 400 token） */
 export function rulesPromptText(): string {
+  // A/B 开关（docs/08 第 4 周）：off 时返回空串 —— 量化规则文本注入对 D 层的价值。
+  // 开关放这里而不是 loop.ts：受保护文件不动，且所有消费方行为一致
+  if (getConfig().RULES_INJECTION === "off") return "";
   return RULES.map((r) => `- 规则 ${r.id}（${r.level === "block" ? "强制" : "注意"}）：${r.description}`).join("\n");
 }

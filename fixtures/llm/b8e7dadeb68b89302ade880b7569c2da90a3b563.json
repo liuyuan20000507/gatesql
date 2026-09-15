@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT p.category AS category, SUM(oi.quantity) AS sales_volume FROM order_items oi JOIN products p ON p.id = oi.product_id GROUP BY p.category ORDER BY sales_volume DESC LIMIT 3\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 528,
+  "outputTokens": 341
+}

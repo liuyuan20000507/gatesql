@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT channel, COUNT(*) AS order_count FROM orders WHERE status = '已完成' GROUP BY channel ORDER BY order_count DESC LIMIT 3\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 528,
+  "outputTokens": 240
+}

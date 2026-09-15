@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"按校验口径，毛利必须基于销售明细的 unit_price - cost 计算，但当前已提供的数据源中仅包含商品表（products 的 price/cost 为标准售价与成本），不存在含 unit_price 的订单明细表和字段，无法在已列出的表结构内按该口径统计各分类实际毛利\"}",
+  "inputTokens": 425,
+  "outputTokens": 5989
+}

@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT COUNT(*) AS completed_order_count FROM orders WHERE status = '已完成'\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 529,
+  "outputTokens": 116
+}

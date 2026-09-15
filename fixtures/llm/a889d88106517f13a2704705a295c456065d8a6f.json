@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT category, SUM(price - cost) AS gross_profit FROM products GROUP BY category ORDER BY gross_profit DESC\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 374,
+  "outputTokens": 247
+}

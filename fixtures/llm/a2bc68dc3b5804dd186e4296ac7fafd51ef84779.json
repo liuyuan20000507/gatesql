@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"数据源中没有库存相关数据：products 表只有售价和成本价，没有库存数量、入库/出库记录或期末库存等信息，无法计算库存周转率。\"}",
+  "inputTokens": 727,
+  "outputTokens": 133
+}

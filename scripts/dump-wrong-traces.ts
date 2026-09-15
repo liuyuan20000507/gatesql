@@ -3,14 +3,17 @@
  * SQL 与结果导出到 trace-dump.txt（评测直连 runAgent，不走 /api/chat，
  * 事件不落库 —— 所以这里主动重放抓事件）。
  *
- * 用法：pnpm tsx scripts/dump-wrong-traces.ts
+ * 用法：pnpm tsx scripts/dump-wrong-traces.ts [题号1 题号2 ...]（缺省为基线错题清单）
+ * 环境变量需与要复现的那轮评测一致（如复现 4D 需 RULES_INJECTION=off），
+ * 否则重放时键对不上 cassette。
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 import { runAgent } from "@/lib/agent/loop";
 
-const TARGETS = ["C3", "C4", "D2", "D4", "E4", "F1", "F3"];
+const DEFAULT_TARGETS = ["C3", "C4", "D2", "D4", "E4", "F1", "F3"];
+const TARGETS = process.argv.slice(2).length > 0 ? process.argv.slice(2) : DEFAULT_TARGETS;
 
 interface GoldItem {
   id: string;

@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT DISTINCT region FROM customers WHERE region IS NOT NULL ORDER BY region\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 522,
+  "outputTokens": 320
+}

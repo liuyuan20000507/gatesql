@@ -64,3 +64,6 @@ logs/
 
 # AI agent 排查时留下的临时探查脚本
 scripts/_tmp_*
+
+# 错题 trace 导出（scripts/dump-wrong-traces.ts 的输出，用完即弃）
+trace-dump.txt

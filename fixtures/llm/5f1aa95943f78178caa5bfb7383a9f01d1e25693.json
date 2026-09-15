@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"当前已列出的 orders 表仅包含 id、customer_id、created_at、status、channel 字段，不存在订单金额/销售额相关字段，无法计算销售额，缺少必要的金额数据\"}",
+  "inputTokens": 429,
+  "outputTokens": 482
+}
