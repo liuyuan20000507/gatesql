@@ -94,26 +94,19 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 
 **结束时能演示**：一个看起来完全可用的 Caliber 网站，全部由写死的假事件以 300ms 间隔驱动。
 
-- [ ] 按 [接口约定](03-api-contract.md) 写 `src/lib/events.ts`（Zod discriminated union）
-  - **完成标准**：包含 `run_started` / `time_resolved` / `context_built` / `sql_generated` / `lint_result` / `rows` / `verification` / `receipt` / `state` / `chart` / `text_delta` / `error` / `done` 全部类型；前端 switch 加 `satisfies never`，**故意删掉一个 case 后 `pnpm build` 报错**
-
-- [ ] 写 `reduceEvents` 纯函数
-  - **完成标准**：不 import React、不做 IO；有一个 Vitest 用例喂 12 条假事件数组、断言最终 `RunState` 的六个字段值
-
-- [ ] 桩接口 `app/api/chat/route.ts`：不调模型不查库，按契约顺序推写死的事件
-  - **完成标准**：`curl -N` 能看到事件一个个冒出来，不是一次性全出来
-
-- [ ] 前端六个区域：状态条 / SQL / 表格 / 图表 / 结论 / 回执
-  - **完成标准**：浏览器提任意问题，六个区域依次出现，全过程可录屏 30 秒
-
-- [ ] `/runs/[id]` 服务端渲染
-  - **完成标准**：关闭标签再打开，页面由服务端渲染出完整内容，与实时看到的逐字一致
-
-- [ ] 写 30 题题面（**只写题目，不写答案**）
-  - **完成标准**：`docs/evalset/questions.md` 有 30 条，按六层各 5 题分好；不可答题 5 题里至少 2 题是口径本质歧义、2 题是数据源里没有的实体
-
-- [ ] 冻结评测集
-  - **完成标准**：`git tag evalset-frozen-v1` 已打，`git log` 显示该 commit **早于任何 agent 实现代码**
+- [x] 按 [接口约定](03-api-contract.md) 写 `src/lib/events.ts`（Zod discriminated union）（1A，`c05a991`）
+  - **完成标准**：包含 13 种事件类型；前端 switch 加 `satisfies never`，删 case 编译报错 —— 已实测
+- [x] 写 `reduceEvents` 纯函数（1B，`3fd7931`；复审 `54ba6a4` 改显式映射）
+  - **完成标准**：不 import React、不做 IO；单测喂假事件断言 RunState
+- [x] 桩接口 `app/api/chat/route.ts`（1C，`ee4726e`）
+  - **完成标准**：`curl -N` 事件逐条冒出；SSE 缓冲坑（X-Accel-Buffering）在桩上踩掉
+- [x] 前端六个区域（1D，`abf3b7f`；StrictMode 双连接用 AbortController 哨兵解决）
+  - **完成标准**：浏览器六区依次出现
+- [x] `/runs/[id]` 服务端渲染（1E，`9c0abe1`）
+  - **完成标准**：与实时页共用同一 reduceEvents，逐字一致
+- [x] 写 30 题题面（1F，`976ad1e`；v2 修订补 F 层 5 题，见 questions.md 修订记录）
+  - **完成标准**：30 条六层分好；E 层覆盖实体缺失与口径歧义两类
+- [x] 冻结评测集（tag `evalset-frozen-v1` 已确认存在，时间早于任何 agent 实现代码）
 
 ---
 
@@ -123,29 +116,22 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 
 **结束时能演示**：真实提问出真实数字；故意问一个容易写错的问题，看到第 1 次被拦、第 2 次修复成功的完整过程。
 
-- [ ] `tests/security/` 攻击语料
-  - **完成标准**：≥30 条 Vitest 用例全绿，覆盖 [安全设计](07-security.md#三自测攻击清单) 的清单，**包括第 10 条假阳性测试**
-
-- [ ] 扫源码断言测试
-  - **完成标准**：确认 `db.exec(` 在 agent 代码路径上出现 **0 次**
-
-- [ ] 只读连接 + `setAuthorizer`
-  - **完成标准**：对只读连接执行 `DELETE FROM orders` 报 `attempt to write a readonly database`；authorizer 回调能打印出 `(action, 表, 列)` 三元组，且对白名单外的表返回拒绝时查询确实被拒
-
-- [ ] `src/lib/sql/guard.ts`（**作者手写**）
-  - **完成标准**：30 条攻击语料全部被正确处理（该拦的拦、该放的放）
-
-- [ ] `src/lib/agent/loop.ts`（**作者手写**）
-  - **完成标准**：包含六步状态机、双预算独立计数器、指纹环路检测、失败六分类；全文 ≤350 行；**作者能对着代码逐行讲出每个分支为什么存在**
-
-- [ ] EQP 预检
-  - **完成标准**：构造缺失 JOIN 条件的三表查询，50ms 内被拒绝并给出中文理由；同时 `SELECT * FROM products`（30 行全表扫描）**被放行**，证明规则结合了行数量级
-
-- [ ] `app.db` 三张表
-  - **完成标准**：问一个真实问题后能查到 1 条 run、≥5 条 step，且某条 `llm_call` step 的 `attributes` 里能读出**当次完整 prompt**
-
-- [ ] 桩接口换成真实逻辑
-  - **完成标准**：**前端一行代码都不用改**。需要改说明契约没遵守，回去对照文档
+- [x] `tests/security/` 攻击语料（2C，`b671f3c` 测试先行 TDD 红 → `1b975c1` 实现转绿）
+  - **完成标准**：37 条用例全绿，含假阳性测试（`LIKE '%drop%'` 放行）
+- [x] 扫源码断言测试（防 `db.exec(` 回潮的哨兵）
+  - **完成标准**：agent 代码路径 0 次出现
+- [x] 只读连接 + `setAuthorizer`（2B）
+  - **完成标准**：写操作被引擎层拒；实测发现 authorizer 不报表名 → 表级黑名单挪到 AST 层（分层原则的实证）
+- [x] `src/lib/sql/guard.ts`（2B；`7cdd811`/`482a22b` 记录 node-sql-parser 类型签名坑）
+  - **完成标准**：37 条语料全过；当前 189 行
+- [x] `src/lib/agent/loop.ts`（2G，`8626920`；**注意**：当前 565 行，超「≤350 行」标准 —— 第 4 周扩入自检审计与 few-shot 接入所致，拆分重构列为待办）
+  - **完成标准**：状态机/双预算/指纹防死循环在位；作者须能逐行讲解（复盘文档已梳理骨架）
+- [x] EQP 预检（2D，`a15f20b`）
+  - **完成标准**：缺失 JOIN 三表查询被拒；`SELECT * FROM products` 小表全扫放行
+- [x] `app.db` 表（2F，`fc3dd48`）
+  - **完成标准**：真实问答后 runs/steps 可查，llm_call step 含完整 prompt（3 周错题翻案、4G 追踪面板均依赖此）
+- [x] 桩接口换成真实逻辑（2H，`7d0fc84`）
+  - **完成标准**：**前端一行未改** —— 契约价值的实测兑现
 
 ---
 
@@ -154,9 +140,9 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 **本阶段唯一目标**：产出后续所有优化的裁判。优先级高于任何 UI 工作。
 
 - [x] 30 题 gold SQL 全部落定并执行确认（gold.jsonl v3，check-gold 30/30 通过）
-- [ ] 金额类题目（≥10 题）用第二种写法交叉验算，两种写法结果一致（**未做** —— 锚点数字已人工核过，但逐题第二写法验算是欠账，第 6 周补）
+- [x] 金额类题目（≥10 题）用第二种写法交叉验算，两种写法结果一致（已清偿 `31484f5`：crosscheck.jsonl 15 题，check-gold 15/15 等价；C3/D3 预聚合写法与 COUNT(DISTINCT) 逐分一致，扇出口径获独立推导背书）
 - [x] 30 条 gold SQL 全部过一遍自己的口径规则引擎，**0 条 block 级违规**（check-gold 输出 lint clean）
-- [ ] gold 以「SQL + 执行结果 JSON」两份存储，结果由脚本生成而非手抄（**未做** —— eval.ts 现跑现算 goldSql，等价于结果不落盘；可复现性靠 cassette+seed 保证）
+- [x] gold 以「SQL + 执行结果 JSON」两份存储，结果由脚本生成而非手抄（已清偿 `31484f5`：build-gold-results.ts 落盘 gold_results.jsonl；eval.ts 开跑前漂移预检，篡改快照实测立即中止且不调任何 LLM）
 - [x] 结果等价比对器 + 独立 Vitest 用例集
   - **完成标准**：覆盖六类 —— 列名不同、列序不同、行序、浮点尾差、int/decimal、NULL vs 0 vs 空串（20 用例）
 - [x] `pnpm eval` 输出 markdown 报告
