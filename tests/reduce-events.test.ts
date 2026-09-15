@@ -57,6 +57,10 @@ const happyWithRetry: CaliberEvent[] = [
   {
     type: "receipt",
     scope: "2026-01-01 至 2026-06-30",
+    excluded: [
+      { status: "已取消", count: 1873 },
+      { status: "已退款", count: 2017 },
+    ],
     filters: ["订单状态=已完成，已排除已取消 1873 单、已退款 2017 单"],
     method: "明细行按含折扣成交价小计求和",
     dataUntil: "2026-08-31",

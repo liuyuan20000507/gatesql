@@ -28,6 +28,7 @@ import type { CaliberEvent, ChartSpec } from "@/lib/events";
 import { explainCost } from "@/lib/sql/explain";
 import { QueryTimeoutError, SqlExecutor } from "@/lib/sql/executor";
 import { guardSql } from "@/lib/sql/guard";
+import { buildReceipt } from "@/lib/sql/receipt";
 import { lintCaliber, type LintHints } from "@/lib/sql/lint";
 import { rulesPromptText } from "@/lib/sql/rules";
 
@@ -130,39 +131,6 @@ function tryParseJson<T>(text: string): T | null {
   } catch {
     return null;
   }
-}
-
-/** 一次口诀式事件封装：type+需要的中文注释防止误用 */
-interface ReceiptPayload {
-  scope: string;
-  filters: string[];
-  method: string;
-  dataUntil: string;
-  coverage: string;
-  fullyTranslated: boolean;
-}
-
-/** 从最后执行的 SQL 里判断是否包含「已完成」约束（口径规则的布尔近似） */
-function sqlPinsCompleted(sql: string | null): boolean {
-  return sql !== null && /已完成/.test(sql);
-}
-
-/** 步骤 9 的机械回执：只翻译我们确定过得意的谓词形态，其余如实落未核验 */
-function buildReceipt(input: {
-  resolution: { from: string; to: string } | null;
-  sql: string | null;
-  asOf: string;
-}): ReceiptPayload {
-  const statusesPinned = sqlPinsCompleted(input.sql);
-  return {
-    scope: input.resolution ? `${input.resolution.from} 至 ${input.resolution.to}` : "全时段",
-    filters: statusesPinned ? ["订单状态=已完成"] : [],
-    method: "按明细行成交小计汇总",
-    dataUntil: input.asOf,
-    coverage: "见结果表格",
-    // 只有当我们真正翻译了某个谓词形态时才说 fullyTranslated —— 否则如实降级
-    fullyTranslated: statusesPinned || input.resolution !== null,
-  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -561,7 +529,12 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       }
     }
 
-    const receipt = buildReceipt({ resolution, sql: lastSql, asOf });
+    const receipt = buildReceipt({
+      resolution,
+      sql: lastSql,
+      asOf,
+      shopDbPath: env.SHOP_DB_PATH,
+    });
     deps.emit({ type: "receipt", ...receipt });
     // 回执翻译不全时，即使其他条件都好也必须如实降级为未核验
     if (!receipt.fullyTranslated && verdict === "verified") {

@@ -23,6 +23,14 @@ export function ReceiptCard({ receipt }: { receipt: NonNullable<RunState["receip
             <dd className="inline">{f}</dd>
           </div>
         ))}
+        {receipt.excluded.length > 0 && (
+          <div>
+            <dt className="inline font-medium text-neutral-600">已排除（实测计数）： </dt>
+            <dd className="inline">
+              {receipt.excluded.map((e) => `${e.status} ${e.count} 单`).join("、")}
+            </dd>
+          </div>
+        )}
         <div>
           <dt className="inline font-medium text-neutral-600">计算方式： </dt>
           <dd className="inline">{receipt.method}</dd>

@@ -91,6 +91,8 @@ export interface RunState {
     method: string;
     dataUntil: string;
     coverage: string;
+    /** 5C：仅已完成口径下被排除的订单实际计数（全库或范围内） */
+    excluded: Array<{ status: string; count: number }>;
     fullyTranslated: boolean;
   } | null;
 
@@ -196,6 +198,7 @@ export function reduceEvent(state: RunState, event: CaliberEvent): RunState {
           method: event.method,
           dataUntil: event.dataUntil,
           coverage: event.coverage,
+          excluded: event.excluded ?? [],
           fullyTranslated: event.fullyTranslated,
         },
       };

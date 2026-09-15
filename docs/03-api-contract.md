@@ -145,7 +145,11 @@ export const dynamic = 'force-dynamic' // 禁止静态优化
   method: string,          // "明细行按含折扣成交价小计求和"
   dataUntil: string,       // "2026-08-31"
   coverage: string,        // "参与计算 4203 单、7891 明细行"
-  fullyTranslated: boolean } // false 时答案必须落「未核验」
+  fullyTranslated: boolean,  // false 时答案必须落「未核验」
+  excluded?: Array<{ status: string, count: number }> }
+  // 5C：口径为「仅已完成」时，由代码对 shop.db 实际 COUNT 得出的
+  // 被排除订单计数（如 [{status:"已取消", count:1873}, {status:"已退款", count:2017}]）。
+  // 全库或范围内（有统计范围时），模型不可见。
 ```
 
 **这个事件的载荷完全由代码从 AST + 规则表生成，模型碰不到它。** 这是它可信的全部理由。

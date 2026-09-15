@@ -188,6 +188,8 @@ export const CaliberEventSchema = z.discriminatedUnion("type", [
     method: z.string(),
     dataUntil: z.string(),
     coverage: z.string(),
+    /** 5C：口径为「仅已完成」时，被排除订单的实际 COUNT（AST+库，模型不可见） */
+    excluded: z.array(z.object({ status: z.string(), count: z.number() })),
     fullyTranslated: z.boolean(),
   }),
 
