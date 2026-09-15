@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"WITH period_orders AS (SELECT customer_id, COUNT(*) AS order_count FROM orders WHERE created_at >= '2026-07-01' AND created_at <= '2026-07-31' GROUP BY customer_id) SELECT ROUND(SUM(CASE WHEN order_count >= 2 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS repurchase_rate FROM period_orders\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1322,
+  "outputTokens": 1163
+}

@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT ROUND(SUM(CASE WHEN order_count >= 2 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS repurchase_rate FROM (SELECT o.customer_id, COUNT(o.id) AS order_count FROM orders o WHERE o.status = '已完成' AND o.created_at BETWEEN '2026-07-01' AND '2026-07-31' GROUP BY o.customer_id)\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1359,
+  "outputTokens": 860
+}

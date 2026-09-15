@@ -17,6 +17,7 @@
 import { createHash } from "node:crypto";
 
 import { callLlm } from "@/lib/agent/llm";
+import { formatFewshotExamples, retrieveFewshots } from "@/lib/agent/fewshot";
 import { buildSchemaContext } from "@/lib/agent/schema-context";
 import { resolveTimeRange } from "@/lib/agent/time";
 import { createRun, finishRun, insertStep, openAppDb, type NewStepInput } from "@/lib/db/app";
@@ -235,7 +236,9 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
     /* ============ 步骤 2：上下文装配（不调 LLM） ============ */
 
     const ctx = buildSchemaContext(question, env.SHOP_DB_PATH);
-    const fewshotIds: string[] = []; // 第 4 周：确定性 few-shot 检索（当前为空，保证可复现）
+    // few-shot A/B 开关（FEW_SHOT，默认 off；docs/05 第四节：≤2 条、低于阈值宁可不给）
+    const fewshots = env.FEW_SHOT === "on" ? retrieveFewshots(appDb, question, ctx.selectedTables) : [];
+    const fewshotIds: string[] = fewshots.map((f) => f.id);
     deps.emit({ type: "context_built", tables: ctx.selectedTables, fewshotIds });
     const hints = extractHints(question);
 
@@ -283,6 +286,9 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         "",
         "表结构：",
         ctx.card,
+        // 条件展开：few-shot 为空时数组元素与旧版完全一致 → prompt 逐字节不变 →
+        // 既有 cassette 全部命中，OFF 路径零成本零破坏
+        ...(fewshots.length > 0 ? [formatFewshotExamples(fewshots)] : []),
       ].join("\n");
 
       const userParts = [`问题：${question}`];

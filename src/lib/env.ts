@@ -26,6 +26,8 @@ const EnvSchema = z.object({
   RULES_INJECTION: z.enum(["on", "off"]).default("on"),
   /** 生成后自检 A/B 开关（docs/08 第 4 周）：默认 off —— 实验证明前保持关闭，不影响既有 cassette */
   SELF_CHECK: z.enum(["on", "off"]).default("off"),
+  /** few-shot A/B 开关（docs/08 第 4 周 / docs/05 第四节）：默认 off；样本来自 corrections verified 行 */
+  FEW_SHOT: z.enum(["on", "off"]).default("off"),
 });
 
 export type EnvConfig = z.infer<typeof EnvSchema>;
