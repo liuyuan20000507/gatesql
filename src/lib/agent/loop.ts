@@ -17,6 +17,7 @@
 import { createHash } from "node:crypto";
 
 import { callLlm } from "@/lib/agent/llm";
+import { findAmbiguity, formatClarifyReason } from "@/lib/agent/clarify";
 import { formatFewshotExamples, retrieveFewshots } from "@/lib/agent/fewshot";
 import { buildSchemaContext } from "@/lib/agent/schema-context";
 import { resolveTimeRange } from "@/lib/agent/time";
@@ -239,6 +240,16 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
     // few-shot A/B 开关（FEW_SHOT，默认 off；docs/05 第四节：≤2 条、低于阈值宁可不给）
     const fewshots = env.FEW_SHOT === "on" ? retrieveFewshots(appDb, question, ctx.selectedTables) : [];
     const fewshotIds: string[] = fewshots.map((f) => f.id);
+
+    // —— 步骤 2.5：口径歧义澄清（docs/08 5A，确定性词典，零 token）——
+    // 命中则直接拒答并附澄清选项，不进生成循环：歧义题「先算再问」会交付武断数字，
+    // 正确行为是先问口径（E3/E4 考的正是这个）
+    const ambiguity = findAmbiguity(question);
+    if (ambiguity) {
+      verdict = "refused";
+      finalStatus = "ambiguous";
+      verdictReasons.push(formatClarifyReason(ambiguity));
+    }
     deps.emit({ type: "context_built", tables: ctx.selectedTables, fewshotIds });
     const hints = extractHints(question);
 
@@ -246,8 +257,8 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
     const repairHistory: Array<{ attempt: number; kind: string; detail: string }> = [];
 
     /* ============ 步骤 3~7：生成 → 检查 → 执行（唯一的重试循环） ============ */
-
-    while (true) {
+    // 口径歧义命中时循环体一次都不进（0 次模型调用，直达拒答）
+    while (!ambiguity) {
       // —— 循环守卫：墙钟 / LLM 调用数 ——
       if (Date.now() - startedAt > budgets.wallClockMs) {
         finalStatus = "BUDGET_EXCEEDED";
@@ -563,7 +574,11 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       verdict,
       reasons: verdictReasons,
       clarifications:
-        verdict === "refused" ? [{ label: "查看可查询的表", description: "customers / products / orders / order_items" }] : undefined,
+        verdict === "refused"
+          ? ambiguity
+            ? ambiguity.options // 口径歧义：给候选口径让用户选
+            : [{ label: "查看可查询的表", description: "customers / products / orders / order_items" }]
+          : undefined,
     });
 
     /* ============ 步骤 10：图表 + 结论（LLM #2，可被预算砍掉） ============ */
