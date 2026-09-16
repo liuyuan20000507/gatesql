@@ -51,13 +51,43 @@ function buildCard(tables: SchemaTable[]): string {
   return lines.join("\n");
 }
 
+/**
+ * 外键一跳闭包：命中一张表就必须带上它能 JOIN 到的邻表。
+ * 反例（6B 期实测修掉的 bug）：「各下单渠道的已完成销售额」二元组只命中 orders，
+ * 裁掉 order_items 后卡片里没有金额字段 —— 模型只能拒答（或违规脑补）。
+ * 销售额这类事实问题，事实表 order_items 必须跟着 orders 进来。
+ */
+const FK_NEIGHBORS: Record<string, string[]> = {
+  orders: ["order_items", "customers"],
+  order_items: ["orders", "products"],
+  products: ["order_items"],
+  customers: ["orders"],
+};
+
+function joinClosure(names: Set<string>): Set<string> {
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const t of [...names]) {
+      for (const n of FK_NEIGHBORS[t] ?? []) {
+        if (!names.has(n)) {
+          names.add(n);
+          grew = true;
+        }
+      }
+    }
+  }
+  return names;
+}
+
 export function buildSchemaContext(question: string, dbPath: string): SchemaContext {
   const all = readShopSchema(dbPath);
   const grams = cjkBigrams(question);
   const scored = grams.length === 0 ? [] : all.filter((t) => grams.some((g) => tableHaystack(t).includes(g)));
 
-  // 命中为空则全部兜底（本库 4 张表，全给也不会超出上下文）
-  const selected = scored.length > 0 ? scored : all;
+  // 命中为空则全部兜底；命中后做外键闭包（保持全表原有顺序，确定性）
+  const chosen = scored.length > 0 ? joinClosure(new Set(scored.map((t) => t.name))) : null;
+  const selected = chosen ? all.filter((t) => chosen.has(t.name)) : all;
 
   return {
     selectedTables: selected.map((t) => t.name),

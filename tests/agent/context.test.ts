@@ -2,7 +2,7 @@
  * time.ts 与 schema-context.ts、llm replay 的验收测试。
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -71,6 +71,17 @@ describe("buildSchemaContext：确定性裁剪与枚举注入", () => {
     const b = buildSchemaContext("各分类销售额排名", SHOP_DB).card;
     expect(a).toBe(b);
   });
+
+  it("外键闭包：只命中 orders 的「渠道销售额」必须带上 order_items（6B 实测 bug 回归）", () => {
+    const ctx = buildSchemaContext("各下单渠道的「已完成」销售额分别是多少？", SHOP_DB);
+    expect(ctx.selectedTables).toContain("order_items");
+    expect(ctx.card).toContain("amount");
+  });
+
+  it("外键闭包：华东客户销售额问题带上明细表", () => {
+    const ctx = buildSchemaContext("华东地区客户的「已完成」销售额是多少？", SHOP_DB);
+    expect(ctx.selectedTables).toContain("order_items");
+  });
 });
 
 describe("callLlm：cassette 回放", () => {
@@ -89,16 +100,18 @@ describe("callLlm：cassette 回放", () => {
   it("replay 模式从 cassette 返回且不发起网络请求", async () => {
     const messages = [{ role: "user" as const, content: "你好" }];
     const key = cassetteKey("chat_completions", "test-model", messages);
-    mkdirSync(path.dirname(path.join("fixtures", "llm", `${key}.json`)), { recursive: true });
-    writeFileSync(
-      path.join("fixtures", "llm", `${key}.json`),
-      JSON.stringify({ text: "来自回放的回复", inputTokens: 10, outputTokens: 5 }),
-      "utf-8",
-    );
+    const file = path.join("fixtures", "llm", `${key}.json`);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ text: "来自回放的回复", inputTokens: 10, outputTokens: 5 }), "utf-8");
 
-    const result = await callLlm(messages);
-    expect(result.fromCache).toBe(true);
-    expect(result.text).toBe("来自回放的回复");
+    try {
+      const result = await callLlm(messages);
+      expect(result.fromCache).toBe(true);
+      expect(result.text).toBe("来自回放的回复");
+    } finally {
+      // 测试自建的 cassette 必须清掉，不污染真实仓库
+      rmSync(file, { force: true });
+    }
   });
 
   it("replay 模式缺 cassette 时报错（提示先录制）", async () => {
