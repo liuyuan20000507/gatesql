@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT c.name AS customer_name FROM customers c JOIN orders o ON o.customer_id = c.id JOIN order_items oi ON oi.order_id = o.id WHERE o.status = '已完成' GROUP BY c.id, c.name ORDER BY SUM(oi.amount) DESC LIMIT 5\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1092,
+  "outputTokens": 630
+}

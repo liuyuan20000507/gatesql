@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"当前可用的表结构中仅列出 customers 和 orders 两张表，orders 表不包含任何金额字段（如 amount/total_price），也未提供 order_items（含 amount/unit_price）表。销售额需要订单金额数据，数据源中不存在，无法生成不编造字段的查询。\"}",
+  "inputTokens": 977,
+  "outputTokens": 348
+}

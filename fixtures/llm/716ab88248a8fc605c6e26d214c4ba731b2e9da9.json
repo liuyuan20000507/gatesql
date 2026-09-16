@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT p.category, SUM((oi.unit_price - p.cost) * oi.quantity) AS gross_profit FROM order_items oi JOIN orders o ON oi.order_id = o.id JOIN products p ON oi.product_id = p.id WHERE o.status = '已完成' GROUP BY p.category ORDER BY gross_profit DESC\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 826,
+  "outputTokens": 457
+}

@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"库存周转率 = 销货成本 ÷ 平均库存金额，计算需要库存数量或库存快照数据。现有 4 张表（customers/products/orders/order_items）仅包含客户、商品标价与成本、订单及订单明细信息，没有任何库存数量、期初期末库存等字段，无法计算库存周转率。\"}",
+  "inputTokens": 1179,
+  "outputTokens": 260
+}

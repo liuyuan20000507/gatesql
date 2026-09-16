@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"当前提供的表结构中仅有 orders 表，且其字段（id、customer_id、created_at、status、channel）不包含任何金额类字段（如 amount 或 unit_price）。计算销售额所需的金额数据在已列出的表和字段中不存在，因此无法生成可信的销售额查询。\"}",
+  "inputTokens": 866,
+  "outputTokens": 592
+}

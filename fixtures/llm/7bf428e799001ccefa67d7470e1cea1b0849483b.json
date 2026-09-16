@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"\",\"unanswerable\":true,\"unanswerableReason\":\"数据源中没有员工表，也不存在任何工资/薪酬相关字段（仅有 customers、products、orders、order_items 四张业务表），无法回答员工平均工资问题。\"}",
+  "inputTokens": 1179,
+  "outputTokens": 109
+}
