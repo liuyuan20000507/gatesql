@@ -22,7 +22,7 @@ const notoSerifSC = Noto_Serif_SC({
 });
 
 export const metadata: Metadata = {
-  title: "Caliber · 会核对口径的取数 agent",
+  title: "GateSQL · 每个数字都要过闸的取数 agent",
   description: "用自然语言问数，只读执行 SQL，交付前用代码强制的口径规则核验每一个数字",
 };
 

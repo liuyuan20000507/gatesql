@@ -9,7 +9,7 @@
 前端的 switch 上加 `satisfies never` 做穷尽检查：
 
 ```ts
-function handle(e: CaliberEvent) {
+function handle(e: GateSQLEvent) {
   switch (e.type) {
     case 'run_started': /* ... */ break
     // ... 其余分支

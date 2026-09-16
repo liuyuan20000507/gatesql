@@ -244,7 +244,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
 
       // —— 步骤 3：生成 SQL ——
       const system = [
-        "你是 Caliber 的 SQL 生成引擎。数据库是 SQLite，只有 4 张业务表。",
+        "你是 GateSQL 的 SQL 生成引擎。数据库是 SQLite，只有 4 张业务表。",
         "请根据用户问题和下面的表结构，生成一条只读查询。",
         "",
         "严格遵守的口径规则：",

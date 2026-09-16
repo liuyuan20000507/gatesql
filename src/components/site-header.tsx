@@ -12,7 +12,7 @@ export function SiteHeader() {
           >
             口
           </span>
-          <span className="font-serif-sc text-lg font-bold tracking-wide text-foreground">Caliber</span>
+          <span className="font-serif-sc text-lg font-bold tracking-wide text-foreground">GateSQL</span>
           <span className="hidden text-xs text-muted-foreground sm:inline">口径台账</span>
         </Link>
         <nav className="flex items-center gap-4 text-sm text-muted-foreground">

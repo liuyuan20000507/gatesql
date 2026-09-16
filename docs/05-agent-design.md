@@ -60,7 +60,7 @@
 | `retrieveFewshots` | `(question, 选中的表) → 0-2 条纠正样本` | 确定性打分，可整体开关做 A/B |
 | `generateSql` | `(上下文, 失败历史) → {sql, citedRules, 不可答标记}` | **LLM** |
 | `guardSql` | `(sql) → 通过 \| 拒绝(规则 id, 被拦片段)` | ★手写，fail-closed |
-| `lintCaliber` | `(sql) → {violations: [{ruleId, level, 缺失谓词, 修复建议}]}` | fail-open |
+| `lintGateSQL` | `(sql) → {violations: [{ruleId, level, 缺失谓词, 修复建议}]}` | fail-open |
 | `explainCost` | `(sql) → 通过 \| 拒绝(理由)` | 确定性 |
 | `executeSql` | `(sql) → {columns, rows, 截断标记, 耗时}` | worker 池 |
 | `probeEmptyResult` | `(sql) → {嫌疑条件, 放宽后 COUNT}` | 只跑 COUNT |

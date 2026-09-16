@@ -62,7 +62,7 @@ export default function Home() {
     <main className="mx-auto min-h-dvh max-w-3xl px-4 py-8">
       <header className="mb-8">
         <h1 className="font-serif-sc text-3xl font-bold tracking-tight text-foreground">
-          用中文问数，交可信的数。
+          用中文问数，每个数字都要过闸。
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           每个答案都带三态结论与口径回执 —— 核验、存疑、拒答，绝不冒充。
