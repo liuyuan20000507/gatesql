@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"product_name\",\"y\":[\"total_quantity\"],\"title\":\"商品销量排行\",\"summary\":\"头部商品销量差距很小，食品与服饰类商品占据前列，各商品间销量分布较为均衡，未出现明显的销量断层。\"}",
+  "inputTokens": 725,
+  "outputTokens": 126
+}

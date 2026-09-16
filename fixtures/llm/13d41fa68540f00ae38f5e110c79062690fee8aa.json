@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT name AS product_name, price AS list_price FROM products ORDER BY price DESC LIMIT 3\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1185,
+  "outputTokens": 254
+}

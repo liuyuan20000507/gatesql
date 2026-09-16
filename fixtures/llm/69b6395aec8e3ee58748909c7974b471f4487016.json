@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"category\",\"y\":[\"total_sales\"],\"title\":\"各商品分类销售额对比\",\"summary\":\"食品生鲜销售额领先，家用电器紧随其后，服饰鞋包垫底，各分类间呈明显的阶梯式下降分布。\"}",
+  "inputTokens": 721,
+  "outputTokens": 123
+}

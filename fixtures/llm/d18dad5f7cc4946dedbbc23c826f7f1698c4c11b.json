@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"category\",\"y\":[\"order_count\"],\"title\":\"各商品分类订单数量对比\",\"summary\":\"五个商品分类的订单数量高度接近，整体分布均衡，服饰鞋包与食品生鲜略占优势，家用电器相对靠后。\"}",
+  "inputTokens": 701,
+  "outputTokens": 199
+}

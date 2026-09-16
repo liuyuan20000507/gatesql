@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"category\",\"y\":[\"total_quantity\"],\"title\":\"各分类销量对比\",\"summary\":\"服饰鞋包、食品生鲜与家用电器的销量十分接近，各分类之间差距不大，呈现均衡分布。\"}",
+  "inputTokens": 688,
+  "outputTokens": 157
+}

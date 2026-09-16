@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"月份\",\"y\":[\"july_sales\",\"august_sales\"],\"title\":\"七月与八月销售额对比\",\"summary\":\"八月销售额高于七月，销售呈环比增长趋势。\"}",
+  "inputTokens": 682,
+  "outputTokens": 665
+}

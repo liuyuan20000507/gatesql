@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT COALESCE(region, '未知') AS region, COUNT(*) AS customer_count FROM customers GROUP BY COALESCE(region, '未知') ORDER BY customer_count DESC\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1180,
+  "outputTokens": 261
+}

@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"product_name\",\"y\":[\"list_price\"],\"title\":\"各商品售价对比\",\"summary\":\"进口牛排略高于机械键盘和有机蔬菜，三者水平接近，差距较小。\"}",
+  "inputTokens": 696,
+  "outputTokens": 349
+}

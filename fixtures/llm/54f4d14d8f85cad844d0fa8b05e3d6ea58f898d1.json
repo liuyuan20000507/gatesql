@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"level\",\"y\":[\"avg_order_value\"],\"title\":\"各会员等级平均客单价\",\"summary\":\"普通会员客单价反而最高，钻石会员最低，各等级客单价差异不大且与会员等级高低呈反向关系。\"}",
+  "inputTokens": 726,
+  "outputTokens": 250
+}

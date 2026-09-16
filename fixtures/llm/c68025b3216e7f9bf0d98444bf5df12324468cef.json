@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"customer_name\",\"y\":[\"total_spent\"],\"title\":\"客户消费金额排行\",\"summary\":\"头部客户消费金额接近，客户间差距不大，高价值客户群体消费水平较为均衡。\"}",
+  "inputTokens": 715,
+  "outputTokens": 125
+}

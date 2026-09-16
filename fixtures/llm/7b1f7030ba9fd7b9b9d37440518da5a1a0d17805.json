@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"channel\",\"y\":[\"total_sales\"],\"title\":\"各渠道销售额对比\",\"summary\":\"各渠道销售额高度接近，未知渠道略居首位，网页渠道垫底，渠道间呈微弱差距分布。\"}",
+  "inputTokens": 704,
+  "outputTokens": 222
+}

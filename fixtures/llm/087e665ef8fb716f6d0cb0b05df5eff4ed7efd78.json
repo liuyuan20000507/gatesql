@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT COALESCE(channel, '未知') AS channel, COUNT(*) AS completed_orders FROM orders WHERE status = '已完成' GROUP BY COALESCE(channel, '未知') ORDER BY completed_orders DESC LIMIT 3\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1185,
+  "outputTokens": 458
+}

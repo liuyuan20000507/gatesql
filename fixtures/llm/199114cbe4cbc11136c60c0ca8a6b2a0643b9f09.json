@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT SUM(oi.amount) AS total_sales FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.status = '已完成' AND o.created_at >= '2025-02-01' AND o.created_at <= '2025-02-28'\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1196,
+  "outputTokens": 365
+}

@@ -1,0 +1,5 @@
+{
+  "text": "{\"kind\":\"bar\",\"x\":\"channel\",\"y\":[\"completed_orders\"],\"title\":\"各渠道已完成订单数对比\",\"summary\":\"未知、APP与小程序三个渠道的完成订单量高度接近，未知渠道略占首位，网页渠道未见完成订单，整体渠道分布较为均衡。\"}",
+  "inputTokens": 682,
+  "outputTokens": 262
+}

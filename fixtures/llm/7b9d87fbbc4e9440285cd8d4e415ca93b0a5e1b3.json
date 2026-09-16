@@ -1,0 +1,5 @@
+{
+  "text": "{\"sql\":\"SELECT SUM(oi.quantity) AS total_quantity FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.status = '已完成'\",\"unanswerable\":false,\"unanswerableReason\":\"\"}",
+  "inputTokens": 1193,
+  "outputTokens": 289
+}
