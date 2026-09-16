@@ -192,6 +192,9 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
   - **完成标准**：30 题评测集上规则误报率 <5%，超标的已降级或删除（5F：eval 报告新增误报率行 —— 样本 = 50 条「结果正确」SQL（25 gold + 25 答对最终 SQL）全量过 lint，**全部 block 规则 0 误报**）
 - [x] SQL 人工编辑重跑 + 纠正样本回流 + 报表固化（5G：问答页「存为报表」仅固化 SQL；/reports 列表 + /reports/[id] 直接执行（guard 复检 + 只读连接 + 每次记 run/execute step，llm_call 恒 0）；runs 详情页人工改 SQL → guard 校验 + 只读重跑 → corrections（verified_by_user=1，表名自动识别）供 few-shot 检索。实测重跑 54ms/结果 41,015,358.75/trace 仅 1 个 execute 步骤；纠正样本 corr_07f3e462 入库 verified）
   - **完成标准**：点报表名重跑时 trace 里 `llm_call` 步骤数为 **0**、响应 <500ms
+- [x] 招牌演示脚本 + 第 5 周评测轮入档（5H：docs/demo-script.md 五镜头 60-90 秒脚本，待作者录制；最终评测 eval_20260916045915 = 30/30、误报率 0%、零回归）
+
+**第 5 周收官**：5A-5H 全部完成。累计曲线：76.7%（原口径）→ 93.3%（校准）→ 96.7%（输出契约）→ **100%（澄清机制）**。下一站第 6 周：Docker / 无 key 演示 / CI 门禁 / README。
 
 ---
 
