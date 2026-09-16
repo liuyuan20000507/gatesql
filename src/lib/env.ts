@@ -28,6 +28,8 @@ const EnvSchema = z.object({
   SELF_CHECK: z.enum(["on", "off"]).default("off"),
   /** few-shot A/B 开关（docs/08 第 4 周 / docs/05 第四节）：默认 off；样本来自 corrections verified 行 */
   FEW_SHOT: z.enum(["on", "off"]).default("off"),
+  /** 每日模型花费预算（元）；耗尽后 live/record 降级到 replay（docs/08 6F），-1 为不限 */
+  DAILY_BUDGET_CNY: z.coerce.number().default(20),
 });
 
 export type EnvConfig = z.infer<typeof EnvSchema>;

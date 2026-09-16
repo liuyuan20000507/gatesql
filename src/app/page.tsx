@@ -14,6 +14,7 @@ import { VerdictPanel } from "@/components/chat/verdict-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { GateSqlEvent } from "@/lib/events";
+import { DEMO_QUESTIONS } from "@/lib/demo-questions";
 import { emptyRunState, reduceEvent, type RunState } from "@/lib/reduce-events";
 import { postChatStream } from "@/lib/sse-client";
 
@@ -86,6 +87,24 @@ export default function Home() {
           {inFlight ? "查询中…" : "发送"}
         </Button>
       </form>
+
+      <div className="mb-6">
+        <p className="mb-2 text-xs text-muted-foreground">试试这些（每个都实测可跑，无 key 时走本地回放）：</p>
+        <div className="flex flex-wrap gap-1.5">
+          {DEMO_QUESTIONS.map((d) => (
+            <button
+              key={d.question}
+              type="button"
+              title={d.highlight}
+              disabled={inFlight}
+              onClick={() => setInput(d.question)}
+              className="rounded border border-border bg-card px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+            >
+              {d.question}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {hasRun && (
         <div className="space-y-4">

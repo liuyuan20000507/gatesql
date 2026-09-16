@@ -65,12 +65,17 @@ function writeCassette(key: string, data: Cassette): void {
   writeFileSync(fixturePath(key), JSON.stringify(data, null, 2), "utf-8");
 }
 
+/** 模式判定：显式 LLM_MODE 优先；无 key 自动 replay（无 key 演示的关键） */
+export function resolveMode(env: { LLM_MODE?: "live" | "record" | "replay"; LLM_API_KEY?: string }): "live" | "record" | "replay" {
+  return env.LLM_MODE ?? (env.LLM_API_KEY ? "live" : "replay");
+}
+
 export async function callLlm(
   messages: LlmMessage[],
   opts: { jsonSchema?: unknown } = {},
 ): Promise<LlmResult> {
   const env = getConfig();
-  const mode: "live" | "record" | "replay" = env.LLM_MODE ?? (env.LLM_API_KEY ? "live" : "replay");
+  const mode = resolveMode(env);
   const wire = pickWire(env.LLM_BASE_URL, env.LLM_WIRE);
   const key = cassetteKey(wire, env.LLM_MODEL, messages, opts.jsonSchema);
 

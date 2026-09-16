@@ -220,8 +220,15 @@ export function saveCorrection(
   );
 }
 
-/** 5G：报表列表（新→旧） */
-export function listReports(db: DatabaseSync): Array<{
+/** 今日（UTC 日期）模型花费合计，用于预算与 /api/health */
+export function getTodayCostCny(db: DatabaseSync): number {
+  const row = db
+    .prepare("SELECT COALESCE(SUM(cost_cny), 0) AS c FROM runs WHERE created_at >= date('now')")
+    .get() as { c: number };
+  return Number(row.c);
+}
+
+/** 5G：报表列表（新→旧） */export function listReports(db: DatabaseSync): Array<{
   id: string;
   name: string;
   sql: string;

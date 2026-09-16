@@ -206,7 +206,7 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 
 - [ ] Docker 单容器
   - **完成标准**：在执行过 `docker system prune` 的干净机器上 `git clone` 后 `docker compose up`，**5 分钟内** `localhost:3000` 可提问，步骤和耗时记进 README
-- [ ] 无 key replay 模式
+- [ ] 无 key replay 模式（代码已就位：/api/health、预置 10 题、resolveMode；**待 5 小时配额 18:53 重置后全量重录 30 题 cassette 再做无 key 端到端验证**。本轮重录发现并修复了 schema 上下文的外键闭包 bug —— 见 main 分支修复提交）
   - **完成标准**：不设置任何 LLM key 时自动进 cassette 回放，预置 10 个问题（含 2 个触发重试自愈、1 个被拒答）全流程可跑
 - [ ] CI 门禁
   - **完成标准**：故意把提示词改坏后 push，**PR 变红**并在评论里贴出对比表和由对转错题号
