@@ -3,6 +3,8 @@ import path from "node:path";
 
 import { DatabaseSync } from "node:sqlite";
 
+import { Parser } from "node-sql-parser";
+
 import { afterEach, describe, expect, it } from "vitest";
 
 import { buildReceipt, sqlPinsCompletedAst } from "@/lib/sql/receipt";
@@ -83,7 +85,7 @@ describe("buildReceipt（5C：AST 识别 + 实际 COUNT）", () => {
 });
 
 describe("sqlPinsCompletedAst", () => {
-  const parse = (sql: string): unknown => new (require("node-sql-parser").Parser)().astify(sql, { databaseType: "sqlite" } as never);
+  const parse = (sql: string): unknown => new Parser().astify(sql, { databaseType: "sqlite" } as never);
 
   it("普通 WHERE 命中", () => {
     expect(sqlPinsCompletedAst(parse(AMOUNT_SQL))).toBe(true);

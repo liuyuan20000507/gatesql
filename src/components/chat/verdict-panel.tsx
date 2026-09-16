@@ -1,5 +1,3 @@
-import { Badge } from "@/components/ui/badge";
-
 export interface Clarification {
   label: string;
   description: string;
@@ -36,7 +34,7 @@ export function VerdictPanel(props: {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
         <div className="mb-2 flex items-center gap-2">
-          <Badge variant="destructive">已拒答</Badge>
+          <span className="stamp stamp-red text-xs">已拒答</span>
           <span className="text-xs text-red-700">
             {props.clarifications.length > 0 ? "这道题可以换个问法继续：" : "这个口径下不给数字。"}
           </span>
@@ -61,7 +59,7 @@ export function VerdictPanel(props: {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
         <div className="mb-2">
-          <Badge className="bg-amber-100 text-amber-800">未核验</Badge>
+          <span className="stamp stamp-amber text-xs">未核验</span>
           <span className="ml-2 text-xs text-amber-800">以下原因导致本次结果未通过全部核验：</span>
         </div>
         <ul className="list-disc pl-5 text-xs text-amber-800">

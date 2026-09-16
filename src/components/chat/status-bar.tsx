@@ -50,17 +50,13 @@ export function StatusBar({
       )}
 
       {verdict && (
-        <Badge
-          className={
-            verdict === "verified"
-              ? "bg-green-100 text-green-800"
-              : verdict === "unverified"
-                ? "bg-amber-100 text-amber-800"
-                : "bg-red-100 text-red-800"
-          }
+        <span
+          className={`stamp text-xs ${
+            verdict === "refused" ? "stamp-red" : verdict === "unverified" ? "stamp-amber" : ""
+          }`}
         >
           {verdict === "verified" ? "已核验" : verdict === "unverified" ? "未核验" : "已拒答"}
-        </Badge>
+        </span>
       )}
 
       {timeDisplay && <span className="ml-auto text-xs text-neutral-500">{timeDisplay}</span>}

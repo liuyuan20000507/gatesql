@@ -4,7 +4,6 @@ import { DatabaseSync } from "node:sqlite";
 
 import { ChartPanel } from "@/components/chat/chart-panel";
 import { ResultTable } from "@/components/chat/result-table";
-import { Badge } from "@/components/ui/badge";
 import type { ChartSpec } from "@/lib/events";
 import { createRun, finishRun, getReport, insertStep, openAppDb } from "@/lib/db/app";
 import { getConfig } from "@/lib/env";
@@ -17,6 +16,31 @@ import type { RunCell } from "@/lib/reduce-events";
  * 每次访问记一条 run + execute step（trace 可查），verdict 固定 verified
  * （SQL 从未变过，结果永远一致 —— 这正是固化 vs 重新生成的本质差异）。
  */
+/** 只读执行固化 SQL 并计时（渲染期不做时钟调用，计时收敛在此） */
+function executeReport(sql: string): { columns: string[]; rows: RunCell[][]; elapsedMs: number; error: string | null } {
+  const env = getConfig();
+  const startedAt = Date.now();
+  try {
+    const shop = new DatabaseSync(env.SHOP_DB_PATH, { readOnly: true });
+    try {
+      const stmt = shop.prepare(sql);
+      const objects = stmt.all() as Array<Record<string, unknown>>;
+      const columns = stmt.columns().map((c) => c.name);
+      const rows = objects.map((o) =>
+        columns.map((c) => {
+          const v = o[c] === undefined ? null : (o[c] ?? null);
+          return (typeof v === "bigint" ? Number(v) : v) as RunCell;
+        }),
+      );
+      return { columns, rows, elapsedMs: Date.now() - startedAt, error: null };
+    } finally {
+      shop.close();
+    }
+  } catch (err) {
+    return { columns: [], rows: [], elapsedMs: Date.now() - startedAt, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export default async function ReportRerunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -52,29 +76,7 @@ export default async function ReportRerunPage({ params }: { params: Promise<{ id
   }
 
   const env = getConfig();
-  const t0 = performance.now();
-  let columns: string[] = [];
-  let rows: RunCell[][] = [];
-  let error: string | null = null;
-  try {
-    const shop = new DatabaseSync(env.SHOP_DB_PATH, { readOnly: true });
-    try {
-      const stmt = shop.prepare(guard.sql);
-      const objects = stmt.all() as Array<Record<string, unknown>>;
-      columns = stmt.columns().map((c) => c.name);
-      rows = objects.map((o) =>
-        columns.map((c) => {
-          const v = o[c] === undefined ? null : (o[c] ?? null);
-          return (typeof v === "bigint" ? Number(v) : v) as RunCell;
-        }),
-      );
-    } finally {
-      shop.close();
-    }
-  } catch (err) {
-    error = err instanceof Error ? err.message : String(err);
-  }
-  const elapsedMs = Math.round(performance.now() - t0);
+  const { columns, rows, elapsedMs, error } = executeReport(guard.sql);
 
   // trace：一条 run + 一个 execute 步骤，llm_call 恒为 0
   const traceDb = openAppDb();
@@ -130,7 +132,7 @@ export default async function ReportRerunPage({ params }: { params: Promise<{ id
       <header className="mb-4">
         <h1 className="text-xl font-semibold tracking-tight">{report.name}</h1>
         <p className="mt-1 text-xs text-neutral-500">
-          <Badge className="bg-green-100 text-green-800">0 次模型调用</Badge>{" "}
+          <span className="stamp text-xs">0 次模型调用</span>{" "}
           <span className="ml-1">直接执行固化 SQL · 本次 {elapsedMs} ms · 结果永远一致</span>
         </p>
       </header>

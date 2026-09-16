@@ -9,7 +9,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-noto-serif-sc);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,38 +49,39 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* 审计凭证主题（5 视觉）：纸白 / 墨绿 / 印章红 */
+  --background: #f6f7f5;
+  --foreground: #1f2a26;
+  --card: #ffffff;
+  --card-foreground: #1f2a26;
+  --popover: #ffffff;
+  --popover-foreground: #1f2a26;
+  --primary: #14584a;
+  --primary-foreground: #f6f7f5;
+  --secondary: #edf0ec;
+  --secondary-foreground: #1f2a26;
+  --muted: #eef0ed;
+  --muted-foreground: #5c6b63;
+  --accent: #e7ede8;
+  --accent-foreground: #14584a;
+  --destructive: #b5432e;
+  --border: #dce1db;
+  --input: #d8ded7;
+  --ring: #14584a;
+  --chart-1: #14584a;
+  --chart-2: #b5432e;
+  --chart-3: #3e7d6b;
+  --chart-4: #c08a2d;
+  --chart-5: #566b63;
+  --radius: 0.5rem;
+  --sidebar: #f6f7f5;
+  --sidebar-foreground: #1f2a26;
+  --sidebar-primary: #14584a;
+  --sidebar-primary-foreground: #f6f7f5;
+  --sidebar-accent: #e7ede8;
+  --sidebar-accent-foreground: #14584a;
+  --sidebar-border: #dce1db;
+  --sidebar-ring: #14584a;
 }
 
 .dark {
@@ -126,5 +127,43 @@
   }
   html {
     @apply font-sans;
+  }
+  table {
+    /* 台账数字：等宽对齐 */
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* 公文衬线（标题/印章用，正文不用） */
+  .font-serif-sc {
+    font-family: var(--font-noto-serif-sc), "Noto Serif SC", "SimSun", serif;
+  }
+
+  /* 检讫章：双线边框 + 印泥色 + 微旋转 —— 三态徽章的视觉语言。
+     颜色只随语义变化（绿=核验、琥珀=未核验、红=拒答），永不做装饰 */
+  .stamp {
+    --stamp-color: #14584a;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.55rem 0.2rem 0.75rem;
+    color: var(--stamp-color);
+    background: #fff;
+    border: 1.5px solid var(--stamp-color);
+    border-radius: 0.45rem;
+    box-shadow:
+      inset 0 0 0 2.5px #fff,
+      inset 0 0 0 4px var(--stamp-color);
+    transform: rotate(-1.5deg);
+    font-family: var(--font-noto-serif-sc), "Noto Serif SC", serif;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    white-space: nowrap;
+  }
+  .stamp-red {
+    --stamp-color: #b5432e;
+  }
+  .stamp-amber {
+    --stamp-color: #b45309;
   }
 }

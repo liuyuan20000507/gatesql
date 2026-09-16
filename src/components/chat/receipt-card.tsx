@@ -12,7 +12,7 @@ export function ReceiptCard({ receipt }: { receipt: NonNullable<RunState["receip
         <span className="font-medium">口径回执</span>
         <span className="text-xs text-neutral-500">由代码生成，模型不可见</span>
       </div>
-      <dl className="space-y-1 text-xs leading-relaxed">
+      <dl className="space-y-1 text-xs leading-relaxed font-variant-numeric tabular-nums">
         <div>
           <dt className="inline font-medium text-neutral-600">统计范围： </dt>
           <dd className="inline">{receipt.scope}</dd>

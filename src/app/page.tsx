@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 import { ChartPanel } from "@/components/chat/chart-panel";
@@ -59,9 +60,13 @@ export default function Home() {
 
   return (
     <main className="mx-auto min-h-dvh max-w-3xl px-4 py-8">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Caliber</h1>
-        <p className="text-sm text-neutral-500">会对错口径说不的取数 agent —— 已核验 / 未核验 / 拒答，三态交付</p>
+      <header className="mb-8">
+        <h1 className="font-serif-sc text-3xl font-bold tracking-tight text-foreground">
+          用中文问数，交可信的数。
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          每个答案都带三态结论与口径回执 —— 核验、存疑、拒答，绝不冒充。
+        </p>
       </header>
 
       <form
@@ -132,7 +137,7 @@ export default function Home() {
               <a href={`/runs/${state.runId}`} className="underline hover:text-neutral-600">
                 查看历史回放
               </a>{" "}
-              · <a href="/reports" className="underline hover:text-neutral-600">固化报表</a>
+              · <Link href="/reports" className="underline hover:text-neutral-600">固化报表</Link>
             </p>
           )}
 
