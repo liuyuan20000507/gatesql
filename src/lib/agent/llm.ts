@@ -95,7 +95,18 @@ export async function callLlm(
   });
 
   const adapter = wire === "responses" ? new ResponsesAdapter() : new ChatCompletionsAdapter();
-  const result = await adapter.chat({ model: env.LLM_MODEL, messages, jsonSchema: opts.jsonSchema, client });
+
+  // 429 退避重试：上游限流是常态（连发评测时实测高发），等 30s 重试一次，
+  // 再失败才向上抛。live/record 共用；replay 不会走到这里
+  let result;
+  try {
+    result = await adapter.chat({ model: env.LLM_MODEL, messages, jsonSchema: opts.jsonSchema, client });
+  } catch (err) {
+    const is429 = err instanceof Error && /429|too frequent/i.test(err.message);
+    if (!is429) throw err;
+    await new Promise((r) => setTimeout(r, 30_000));
+    result = await adapter.chat({ model: env.LLM_MODEL, messages, jsonSchema: opts.jsonSchema, client });
+  }
 
   if (mode === "record") {
     writeCassette(key, {
