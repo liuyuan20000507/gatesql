@@ -5,6 +5,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ChartPanel } from "@/components/chat/chart-panel";
 import { EmptyReasonBanner, IncompleteBanner } from "@/components/chat/verification-banners";
 import { ReceiptCard } from "@/components/chat/receipt-card";
+import { SaveReportButton } from "@/components/chat/save-report-button";
 import { ResultTable } from "@/components/chat/result-table";
 import { SqlAttemptsPanel } from "@/components/chat/sql-attempts-panel";
 import { StatusBar } from "@/components/chat/status-bar";
@@ -130,9 +131,12 @@ export default function Home() {
               {state.stats.elapsedMs} ms ·{" "}
               <a href={`/runs/${state.runId}`} className="underline hover:text-neutral-600">
                 查看历史回放
-              </a>
+              </a>{" "}
+              · <a href="/reports" className="underline hover:text-neutral-600">固化报表</a>
             </p>
           )}
+
+          <SaveReportButton runId={state.runId ?? ""} enabled={state.finished && state.verdict === "verified"} />
         </div>
       )}
     </main>

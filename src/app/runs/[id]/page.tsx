@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ChartPanel } from "@/components/chat/chart-panel";
+import { CorrectionForm } from "@/components/chat/correction-form";
 import { EmptyReasonBanner, IncompleteBanner } from "@/components/chat/verification-banners";
 import { ReceiptCard } from "@/components/chat/receipt-card";
 import { ResultTable } from "@/components/chat/result-table";
@@ -112,6 +113,10 @@ export default async function RunDetailPage({ params }: PageProps<"/runs/[id]">)
         )}
 
         <TracePanel steps={steps} />
+
+        {events.length > 0 && (
+          <CorrectionForm runId={id} initialSql={state.attempts[state.attempts.length - 1]?.sql ?? null} />
+        )}
       </div>
     </main>
   );

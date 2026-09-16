@@ -220,6 +220,53 @@ export function saveCorrection(
   );
 }
 
+/** 5G：报表列表（新→旧） */
+export function listReports(db: DatabaseSync): Array<{
+  id: string;
+  name: string;
+  sql: string;
+  chartSpec: string | null;
+  sourceRunId: string | null;
+  createdAt: string;
+}> {
+  const rows = db
+    .prepare("SELECT id, name, sql, chart_spec, source_run_id, created_at FROM reports ORDER BY created_at DESC")
+    .all() as Array<{ id: string; name: string; sql: string; chart_spec: string | null; source_run_id: string | null; created_at: string }>;
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    sql: r.sql,
+    chartSpec: r.chart_spec,
+    sourceRunId: r.source_run_id,
+    createdAt: r.created_at,
+  }));
+}
+
+/** 5G：单条报表 */
+export function getReport(db: DatabaseSync, id: string): {
+  id: string;
+  name: string;
+  sql: string;
+  chartSpec: string | null;
+  sourceRunId: string | null;
+  createdAt: string;
+} | null {
+  const row = db
+    .prepare("SELECT id, name, sql, chart_spec, source_run_id, created_at FROM reports WHERE id = ?")
+    .get(id) as
+    | { id: string; name: string; sql: string; chart_spec: string | null; source_run_id: string | null; created_at: string }
+    | undefined;
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    sql: row.sql,
+    chartSpec: row.chart_spec,
+    sourceRunId: row.source_run_id,
+    createdAt: row.created_at,
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* eval_runs / eval_items（第 3 周评测体系）                            */
 /* ------------------------------------------------------------------ */

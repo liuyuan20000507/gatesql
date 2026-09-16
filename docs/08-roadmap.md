@@ -190,7 +190,7 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
   - **完成标准**：构造必然空结果的问题，界面明确指出是哪个条件把数据滤没，并给出放宽后的行数
 - [x] 8 条口径规则的正反 fixture 全部在 Vitest 里（tests/rules/lint.test.ts 数据驱动遍历 RULES：16 条 + fail-open + 别名/反引号误报回归；新规则缺 fixture 即无处进表）
   - **完成标准**：30 题评测集上规则误报率 <5%，超标的已降级或删除（5F：eval 报告新增误报率行 —— 样本 = 50 条「结果正确」SQL（25 gold + 25 答对最终 SQL）全量过 lint，**全部 block 规则 0 误报**）
-- [ ] SQL 人工编辑重跑 + 纠正样本回流 + 报表固化
+- [x] SQL 人工编辑重跑 + 纠正样本回流 + 报表固化（5G：问答页「存为报表」仅固化 SQL；/reports 列表 + /reports/[id] 直接执行（guard 复检 + 只读连接 + 每次记 run/execute step，llm_call 恒 0）；runs 详情页人工改 SQL → guard 校验 + 只读重跑 → corrections（verified_by_user=1，表名自动识别）供 few-shot 检索。实测重跑 54ms/结果 41,015,358.75/trace 仅 1 个 execute 步骤；纠正样本 corr_07f3e462 入库 verified）
   - **完成标准**：点报表名重跑时 trace 里 `llm_call` 步骤数为 **0**、响应 <500ms
 
 ---
