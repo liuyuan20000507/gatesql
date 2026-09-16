@@ -19,7 +19,7 @@ import {
   saveCorrection,
   saveReport,
 } from "@/lib/db/app";
-import type { CaliberEvent } from "@/lib/events";
+import type { GateSqlEvent } from "@/lib/events";
 
 const dbFiles: string[] = [];
 const openConns: ReturnType<typeof openAppDb>[] = [];
@@ -29,7 +29,7 @@ function freshDb() {
   // 放项目 data/test-app/ 下（data/*.db 已被 gitignore），纯 ASCII 路径。
   const dir = path.join("data", "test-app");
   mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, `caliber_test_${crypto.randomUUID()}.db`);
+  const file = path.join(dir, `gatesql_test_${crypto.randomUUID()}.db`);
   const db = openAppDb(file);
   dbFiles.push(file);
   openConns.push(db);
@@ -111,10 +111,10 @@ describe("app.db：run + step + event 闭环", () => {
     expect(getStepsForRun(db, "r_nobody")).toEqual([]); // 评测 run 无 events 但有 steps 的对称面：无记录时为空
   });
 
-  it("事件回放 roundtrip：原样还原 CaliberEvent", () => {
+  it("事件回放 roundtrip：原样还原 GateSqlEvent", () => {
     const { db } = freshDb();
     createRun(db, { id: "r_3", question: "q", asOfDate: "2026-08-31", llmMode: "replay", createdAt: "2026-09-13T00:00:00.000Z" });
-    const event: CaliberEvent = {
+    const event: GateSqlEvent = {
       type: "rows",
       columns: ["category"],
       rows: [["手机数码", 123.45]],

@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { emptyRunState, reduceEvent, reduceEvents, type RunState } from "../src/lib/reduce-events";
-import type { CaliberEvent } from "../src/lib/events";
+import type { GateSqlEvent } from "../src/lib/events";
 
 /**
  * 一段真实的重试剧本：第 1 次 SQL 被口径规则 R1 打回（漏了 status 过滤），
  * 第 2 次通过、执行、体检、判定、出图，正常收尾。
  * 事件顺序必须与 docs/03-api-contract.md 的「事件顺序保证」一致。
  */
-const happyWithRetry: CaliberEvent[] = [
+const happyWithRetry: GateSqlEvent[] = [
   { type: "run_started", runId: "r_001", asOfDate: "2026-08-31" },
   { type: "context_built", tables: ["orders", "order_items", "products"], fewshotIds: [] },
   {
@@ -110,7 +110,7 @@ describe("reduceEvents", () => {
   });
 
   it("error 后收到 done：finished 为 true 且 phase 停留在 failed", () => {
-    const events: CaliberEvent[] = [
+    const events: GateSqlEvent[] = [
       { type: "run_started", runId: "r_002", asOfDate: "2026-08-31" },
       {
         type: "error",
@@ -135,14 +135,14 @@ describe("reduceEvents", () => {
       { type: "text_delta", delta: "上个月销" },
       { type: "text_delta", delta: "售额最高的是" },
       { type: "text_delta", delta: "手机数码" },
-    ] as CaliberEvent[]) {
+    ] as GateSqlEvent[]) {
       s = reduceEvent(s, e);
     }
     expect(s.summaryText).toBe("上个月销售额最高的是手机数码");
   });
 
   it("拒答态：reasons 与澄清选项进入状态", () => {
-    const events: CaliberEvent[] = [
+    const events: GateSqlEvent[] = [
       { type: "run_started", runId: "r_004", asOfDate: "2026-08-31" },
       {
         type: "state",

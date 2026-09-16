@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runAgent } from "@/lib/agent/loop";
 import { appendEvent, openAppDb } from "@/lib/db/app";
 import { ChatRequestSchema, encodeSseEvent } from "@/lib/events";
-import type { CaliberEvent } from "@/lib/events";
+import type { GateSqlEvent } from "@/lib/events";
 
 /**
  * /api/chat —— 真 agent 入口（第 2 周起）。
@@ -32,9 +32,9 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
-      const sentEvents: CaliberEvent[] = [];
+      const sentEvents: GateSqlEvent[] = [];
 
-      const enqueue = (event: CaliberEvent) => {
+      const enqueue = (event: GateSqlEvent) => {
         sentEvents.push(event);
         controller.enqueue(encoder.encode(encodeSseEvent(event)));
       };

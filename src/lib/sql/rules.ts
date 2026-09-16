@@ -20,7 +20,7 @@ import type { RuleId } from "@/lib/events";
 /** 严重级别：block = 不执行、回喂重生成；warn = 继续执行但答案降级「未核验」 */
 export const RuleLevelSchema = z.enum(["block", "warn"]);
 
-export interface CaliberRule {
+export interface GateRule {
   id: RuleId;
   level: "block" | "warn";
   /** 简短名称 */
@@ -43,7 +43,7 @@ export interface CaliberRule {
  * 命名空间是固定的：金额聚合 / 订单量 / 可空列 / 时效性 / 排序截断 /
  * 多表连接 —— 新增规则不要越过这六个维度（跨越意味着换个维度做产品）。
  */
-export const RULES: readonly CaliberRule[] = [
+export const RULES: readonly GateRule[] = [
   {
     id: "R1",
     level: "block",
@@ -142,7 +142,7 @@ export const RULES: readonly CaliberRule[] = [
   },
 ];
 
-export const RULES_BY_ID: ReadonlyMap<RuleId, CaliberRule> = new Map(
+export const RULES_BY_ID: ReadonlyMap<RuleId, GateRule> = new Map(
   RULES.map((rule) => [rule.id, rule]),
 );
 

@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
 import { resultsEqual, type ResultSetLike } from "@/lib/eval/compare";
-import { lintCaliber } from "@/lib/sql/lint";
+import { lintRules } from "@/lib/sql/lint";
 
 interface GoldItem {
   id: string;
@@ -42,7 +42,7 @@ for (const g of gold) {
     const stmt = db.prepare(g.goldSql);
     const rows = stmt.all() as Array<Record<string, unknown>>;
     const cols = stmt.columns().map((c) => c.name);
-    const lint = lintCaliber(g.goldSql, { timeKeywords: [], rankKeywords: [] });
+    const lint = lintRules(g.goldSql, { timeKeywords: [], rankKeywords: [] });
     const blocks = lint.violations.filter((v) => v.level === "block");
     const warns = lint.violations.filter((v) => v.level === "warn");
     const lintTag = blocks.length > 0 ? `BLOCK:${blocks.map((v) => v.ruleId).join(",")}` : warns.length > 0 ? `warn:${warns.map((v) => v.ruleId).join(",")}` : "clean";

@@ -13,7 +13,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import { getConfig } from "@/lib/env";
-import type { CaliberEvent } from "@/lib/events";
+import type { GateSqlEvent } from "@/lib/events";
 
 const SCHEMA_SQL = readFileSync(path.join(process.cwd(), "src", "lib", "db", "schema.sql"), "utf-8");
 
@@ -138,7 +138,7 @@ export function insertStep(db: DatabaseSync, input: NewStepInput): void {
 
 /* ------------------------------------------------------------------ */
 /* events（SSE 事件的持久化副本 → /runs 回放的唯一数据源）               */
-/* ------------------------------------------------------------------ */export function appendEvent(db: DatabaseSync, runId: string, event: CaliberEvent): void {
+/* ------------------------------------------------------------------ */export function appendEvent(db: DatabaseSync, runId: string, event: GateSqlEvent): void {
   const last = db
     .prepare("SELECT COALESCE(MAX(seq), 0) AS n FROM events WHERE run_id = ?")
     .get(runId) as { n: number };
@@ -150,11 +150,11 @@ export function insertStep(db: DatabaseSync, input: NewStepInput): void {
   );
 }
 
-export function getEventsForRun(db: DatabaseSync, runId: string): CaliberEvent[] {
+export function getEventsForRun(db: DatabaseSync, runId: string): GateSqlEvent[] {
   const rows = db
     .prepare("SELECT payload FROM events WHERE run_id = ? ORDER BY seq")
     .all(runId) as Array<{ payload: string }>;
-  return rows.map((r) => JSON.parse(r.payload) as CaliberEvent);
+  return rows.map((r) => JSON.parse(r.payload) as GateSqlEvent);
 }
 
 /* ------------------------------------------------------------------ */

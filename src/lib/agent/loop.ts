@@ -1,5 +1,5 @@
 /**
- * Caliber 的 agent 主循环（全项目核心，作者必须逐段理解并会复述）。
+ * GateSQL 的 agent 主循环（全项目核心，作者必须逐段理解并会复述）。
  *
  * 装配关系：把 2A-2F 的零件按 docs/05-agent-design.md 的 12 步串起来。
  * 所有零件都已实现并有测试；本文件只负责「流程、预算、重试、可观测」。
@@ -25,13 +25,13 @@ import { detectIncompletePeriod } from "@/lib/agent/period";
 import { createRun, finishRun, insertStep, openAppDb, type NewStepInput } from "@/lib/db/app";
 import { resolveDefaultAsOf } from "@/lib/db/schema";
 import { getConfig } from "@/lib/env";
-import type { CaliberEvent, ChartSpec } from "@/lib/events";
+import type { GateSqlEvent, ChartSpec } from "@/lib/events";
 import { explainCost } from "@/lib/sql/explain";
 import { buildEmptyResultProbes } from "@/lib/sql/probe";
 import { QueryTimeoutError, SqlExecutor } from "@/lib/sql/executor";
 import { guardSql } from "@/lib/sql/guard";
 import { buildReceipt } from "@/lib/sql/receipt";
-import { lintCaliber, type LintHints } from "@/lib/sql/lint";
+import { lintRules, type LintHints } from "@/lib/sql/lint";
 import { rulesPromptText } from "@/lib/sql/rules";
 
 /* ------------------------------------------------------------------ */
@@ -43,7 +43,7 @@ export interface RunAgentDeps {
   /** 覆写默认时钟（评测复现用） */
   asOfDate?: string;
   /** 把一个事件推给前端（由 route 负责编码为 SSE 帧并落库） */
-  emit(event: CaliberEvent): void;
+  emit(event: GateSqlEvent): void;
   /** 记录一条执行步骤（内存缓冲，run 结束时统一 flush） */
   trace(step: Omit<NewStepInput, "runId">): void;
 }
@@ -376,7 +376,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       }
 
       // —— 步骤 5：口径 lint（fail-open；block 消耗 repairs 预算）——
-      const lintResult = lintCaliber(guard.sql, hints);
+      const lintResult = lintRules(guard.sql, hints);
       deps.emit({ type: "lint_result", attempt, violations: lintResult.violations });
       trace({
         kind: "lint",
@@ -395,7 +395,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         const blame = blockViolations.map((v) => v.missingPredicate).join("；");
         if (budgets.repairs > 0) {
           budgets.repairs--;
-          repairHistory.push({ attempt, kind: "CALIBER_VIOLATION", detail: blame });
+          repairHistory.push({ attempt, kind: "RULE_VIOLATION", detail: blame });
           continue;
         }
         // 预算耗尽仍未修复口径 —— 拒答（三态之一），绝不在错误口径下出数字

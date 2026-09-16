@@ -1,5 +1,5 @@
 /**
- * 事件折叠：把 CaliberEvent 流折叠成界面状态 RunState。
+ * 事件折叠：把 GateSqlEvent 流折叠成界面状态 RunState。
  *
  * 这是纯函数 —— 不 import React、不做 IO、不改入参。同一份代码服务三个场景：
  *   - 实时对话页：useReducer 消费增量事件（每来一条调一次 reduceEvent）
@@ -10,7 +10,7 @@
  * 因为两个场景根本不可能不一致：它们用的是同一个函数。
  */
 
-import type { CaliberEvent, ChartSpec, LintViolation, RuleId, Verdict } from "./events";
+import type { GateSqlEvent, ChartSpec, LintViolation, RuleId, Verdict } from "./events";
 
 export type RunCell = string | number | boolean | null;
 
@@ -135,7 +135,7 @@ export function emptyRunState(): RunState {
  * 单步折叠。必须返回新对象而不是原地修改 —— React useReducer 依赖
  * 引用变化来判断要不要重渲染。
  */
-export function reduceEvent(state: RunState, event: CaliberEvent): RunState {
+export function reduceEvent(state: RunState, event: GateSqlEvent): RunState {
   switch (event.type) {
     case "run_started":
       return { ...state, runId: event.runId, asOfDate: event.asOfDate, phase: "understanding" };
@@ -249,6 +249,6 @@ export function reduceEvent(state: RunState, event: CaliberEvent): RunState {
 }
 
 /** 整段折叠。历史页和单测用 */
-export function reduceEvents(events: CaliberEvent[]): RunState {
+export function reduceEvents(events: GateSqlEvent[]): RunState {
   return events.reduce(reduceEvent, emptyRunState());
 }

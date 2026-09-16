@@ -7,12 +7,12 @@
  */
 
 import { parseSseData } from "@/lib/events";
-import type { CaliberEvent } from "@/lib/events";
+import type { GateSqlEvent } from "@/lib/events";
 
 export async function postChatStream(
   url: string,
   body: unknown,
-  onEvent: (event: CaliberEvent) => void,
+  onEvent: (event: GateSqlEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch(url, {

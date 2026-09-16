@@ -1,5 +1,5 @@
 /**
- * Caliber 的唯一契约：SSE 事件协议。
+ * GateSQL 的唯一契约：SSE 事件协议。
  *
  * 这个文件被三方 import 同一份：
  *   - Route Handler（生产者）：app/api/chat/route.ts
@@ -94,7 +94,7 @@ export const VerdictSchema = z.enum(["verified", "unverified", "refused"]);
 /* 事件定义                                                            */
 /* ------------------------------------------------------------------ */
 
-export const CaliberEventSchema = z.discriminatedUnion("type", [
+export const GateSqlEventSchema = z.discriminatedUnion("type", [
   /* ---- 阶段类：告诉用户系统进行到哪了 ---- */
 
   /** 必须在 800ms 内送达，用户不能面对空白等待 */
@@ -246,7 +246,7 @@ export const CaliberEventSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-export type CaliberEvent = z.infer<typeof CaliberEventSchema>;
+export type GateSqlEvent = z.infer<typeof GateSqlEventSchema>;
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 export type Verdict = z.infer<typeof VerdictSchema>;
 export type LintViolation = z.infer<typeof LintViolationSchema>;
@@ -260,7 +260,7 @@ export type RuleId = z.infer<typeof RuleIdSchema>;
  * 把一个事件编码成 SSE 帧。约定：event 行只写类型名，data 行是完整 JSON
  * （含 type 字段，方便客户端在只拿得到 data 时也能分辨类型）。
  */
-export function encodeSseEvent(event: CaliberEvent): string {
+export function encodeSseEvent(event: GateSqlEvent): string {
   const json = JSON.stringify(event);
   return `event: ${event.type}\ndata: ${json}\n\n`;
 }
@@ -269,6 +269,6 @@ export function encodeSseEvent(event: CaliberEvent): string {
  * 从 SSE 帧的 data 行解析并校验事件。解析失败抛错而不是返回 null ——
  * 事件流中出现非法载荷属于契约破坏，静默吞掉会把问题推迟到更难查的地方。
  */
-export function parseSseData(raw: string): CaliberEvent {
-  return CaliberEventSchema.parse(JSON.parse(raw));
+export function parseSseData(raw: string): GateSqlEvent {
+  return GateSqlEventSchema.parse(JSON.parse(raw));
 }

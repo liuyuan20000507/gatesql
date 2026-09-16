@@ -23,8 +23,8 @@ import { runAgent, type RunSummary } from "@/lib/agent/loop";
 import { createEvalRun, getEvalItemResults, getLatestEvalRun, openAppDb, recordEvalItem } from "@/lib/db/app";
 import { resultsEqual, type ResultSetLike } from "@/lib/eval/compare";
 import { getConfig } from "@/lib/env";
-import { lintCaliber } from "@/lib/sql/lint";
-import type { CaliberEvent } from "@/lib/events";
+import { lintRules } from "@/lib/sql/lint";
+import type { GateSqlEvent } from "@/lib/events";
 
 /**
  * 显式加载 .env.local —— 它是 Next 的约定，tsx 脚本不会自动读取。
@@ -121,12 +121,12 @@ function executeGold(goldSql: string, dbPath: string): ResultSetLike {
 /* ------------------------------------------------------------------ */
 
 interface QuestionOutcome {
-  events: CaliberEvent[];
+  events: GateSqlEvent[];
   summary: RunSummary;
 }
 
 async function runQuestion(question: string, asOfDate: string): Promise<QuestionOutcome> {
-  const events: CaliberEvent[] = [];
+  const events: GateSqlEvent[] = [];
   const summary = await runAgent({
     question,
     asOfDate,
@@ -310,7 +310,7 @@ async function main() {
   const correctSet = [...goldSqls, ...agentCorrectSqls];
   const fpBlocks = new Map<string, number>();
   for (const sql of correctSet) {
-    const rep = lintCaliber(sql); // 无提示词口径（R6/R7 不在此列）
+    const rep = lintRules(sql); // 无提示词口径（R6/R7 不在此列）
     for (const v of rep.violations) {
       if (v.level === "block") fpBlocks.set(v.ruleId, (fpBlocks.get(v.ruleId) ?? 0) + 1);
     }

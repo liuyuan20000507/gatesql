@@ -319,7 +319,7 @@ function ruleR8(select: Record<string, unknown>): LintViolation | null {
 /* 入口                                                                */
 /* ------------------------------------------------------------------ */
 
-export function lintCaliber(sql: string, hints?: LintHints): LintReport {
+export function lintRules(sql: string, hints?: LintHints): LintReport {
   try {
     const parsed = new Parser().astify(sql, { databaseType: "sqlite" } as unknown as Option);
     if (Array.isArray(parsed)) {

@@ -1,7 +1,7 @@
 /**
  * LLM provider 适配层。
  *
- * 目标：不把 Caliber 绑死在某个供应商上。供应商之间真正不同的是
+ * 目标：不把 GateSQL 绑死在某个供应商上。供应商之间真正不同的是
  * 「线上协议」（wire format），主流只有两种：
  *   - responses API      —— 火山 Coding Plan 实测只能用这个（chat.completions 404）
  *   - chat.completions   —— DeepSeek / OpenAI / 智谱 / Moonshot 等通用
