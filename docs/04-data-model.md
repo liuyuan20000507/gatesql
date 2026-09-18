@@ -138,6 +138,7 @@ SQLite 原生不支持列注释，所以单独建表存。`GET /api/schema` 和�
 - `lint` → 命中的规则 id 列表、各自的缺失谓词
 - `eqp` → EQP 原始输出、判定结论
 - `verify` → 四项体检的结果
+- `receipt` → 是否钉住已完成口径（pinned）、filters / excluded 条数、fullyTranslated
 
 > **必须存下当次实际发给模型的 schema 切片全文。** 否则事后无法复现「模型为什么会写错」—— 这是 trace 存在的首要理由。
 

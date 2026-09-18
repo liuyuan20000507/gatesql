@@ -569,6 +569,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       }
     }
 
+    const tReceipt = Date.now();
     const receipt = buildReceipt({
       resolution,
       sql: lastSql,
@@ -576,6 +577,19 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       shopDbPath: env.SHOP_DB_PATH,
     });
     deps.emit({ type: "receipt", ...receipt });
+    trace({
+      kind: "receipt",
+      seq: attempts + 200,
+      startedAt: tReceipt,
+      endedAt: Date.now(),
+      status: "ok",
+      attributes: {
+        pinned: receipt.filters.length > 0,
+        filters: receipt.filters.length,
+        excluded: receipt.excluded.length,
+        fullyTranslated: receipt.fullyTranslated,
+      },
+    });
     // 回执翻译不全时，即使其他条件都好也必须如实降级为未核验
     if (!receipt.fullyTranslated && verdict === "verified") {
       verdict = "unverified";
