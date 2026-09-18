@@ -170,6 +170,8 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
   let verdict: RunSummary["verdict"] = null;
   const verdictReasons: string[] = [];
   let warnSeen = false;
+  /** warnSeen 已带专属理由（空集聚合分支），步骤 9 不再补泛化理由 */
+  let warnReasoned = false;
   let success: { columns: string[]; rows: unknown[][] } | null = null;
   let lastSql: string | null = null;
   const stepBuffer: Array<Omit<NewStepInput, "runId">> = [];
@@ -513,6 +515,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         checks.push({ kind: "empty_result", passed: true, detail: "结果非空" });
         checks.push({ kind: "suspicious_shape", passed: false, detail: "聚合结果为单个 NULL：范围内 0 行，聚合建立在空集上" });
         warnSeen = true; // 单个 NULL 的「0」绝不能以已核验姿态交付
+        warnReasoned = true;
         verdictReasons.push("聚合建立在空集上：本范围内没有匹配数据，数字（NULL/0）不代表业务为零");
       } else {
         checks.push({ kind: "empty_result", passed: true, detail: "结果非空" });
@@ -563,6 +566,9 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         verdict = "unverified";
         if (finalStatus !== "ok" && finalStatus !== "EMPTY_RESULT" && finalStatus !== "BUDGET_EXCEEDED") {
           verdictReasons.push(`执行未完成（${finalStatus}）`);
+        }
+        if (warnSeen && !warnReasoned) {
+          verdictReasons.push("存在口径疑点（见 lint / 自检记录），如实降级为未核验");
         }
       } else {
         verdict = "verified";
