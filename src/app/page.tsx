@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 import { ChartPanel } from "@/components/chat/chart-panel";
 import { EmptyReasonBanner, IncompleteBanner } from "@/components/chat/verification-banners";
 import { ReceiptCard } from "@/components/chat/receipt-card";
-import { SaveReportButton } from "@/components/chat/save-report-button";
+import { RunActionBar } from "@/components/chat/run-action-bar";
 import { ResultTable } from "@/components/chat/result-table";
 import { SqlAttemptsPanel } from "@/components/chat/sql-attempts-panel";
 import { StatusBar } from "@/components/chat/status-bar";
@@ -18,6 +17,9 @@ import { DEMO_QUESTIONS } from "@/lib/demo-questions";
 import { emptyRunState, reduceEvent, type RunState } from "@/lib/reduce-events";
 import { postChatStream } from "@/lib/sse-client";
 
+/** 当前 run 事件快照的 sessionStorage 键（标签页内保留，重开浏览器自然清空） */
+const RESTORE_KEY = "gatesql:last-run-events";
+
 export default function Home() {
   // reset 与事件分两类 action：新提问必须清空上一次的状态，
   // 否则 attempts/summaryText 会跨 run 累加（实测踩过：结论文字翻倍）
@@ -27,13 +29,46 @@ export default function Home() {
     undefined,
     emptyRunState,
   );
-  const dispatchEvent = useCallback((event: GateSqlEvent) => dispatch({ kind: "event", event }), []);
+  // 会话级现场保存：本 tab 内点进回放/切页再返回，问答现场不丢。
+  // 事件流是状态的唯一事实源（reduceEvents 纯函数），存事件 = 存全部现场。
+  const eventsRef = useRef<GateSqlEvent[]>([]);
+  const restoredRef = useRef(false);
+  const dispatchEvent = useCallback(
+    (event: GateSqlEvent) => {
+      eventsRef.current.push(event);
+      dispatch({ kind: "event", event });
+    },
+    [],
+  );
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   // 组件卸载时中止在途请求 —— StrictMode 下尤其必要
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // 挂载：恢复上一次 run 的事件并重放进 reducer（ref 哨兵防 StrictMode 双执行重复恢复）
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    const raw = sessionStorage.getItem(RESTORE_KEY);
+    if (!raw) return;
+    try {
+      for (const event of JSON.parse(raw) as GateSqlEvent[]) dispatch({ kind: "event", event });
+    } catch {
+      sessionStorage.removeItem(RESTORE_KEY);
+    }
+  }, [dispatch]);
+
+  // 卸载：把当前 run 的事件快照写入 sessionStorage（ref 为空说明刚恢复过，保留旧快照）
+  useEffect(
+    () => () => {
+      if (eventsRef.current.length > 0) {
+        sessionStorage.setItem(RESTORE_KEY, JSON.stringify(eventsRef.current));
+      }
+    },
+    [],
+  );
 
   const send = useCallback(async () => {
     const question = input.trim();
@@ -44,6 +79,7 @@ export default function Home() {
     abortRef.current = ac;
     setStreaming(true);
     dispatch({ kind: "reset" });
+    eventsRef.current = []; // 新提问：事件快照从零开始积累，结束后覆盖旧现场
 
     try {
       await postChatStream("/api/chat", { question, conversationId: null }, dispatchEvent, ac.signal);
@@ -54,7 +90,7 @@ export default function Home() {
     } finally {
       setStreaming(false);
     }
-  }, [input, streaming]);
+  }, [input, streaming, dispatchEvent]);
 
   const hasRun = state.runId !== null;
   const inFlight = streaming && !state.finished;
@@ -110,6 +146,13 @@ export default function Home() {
         <div className="space-y-4">
           <StatusBar phase={state.phase} timeDisplay={state.timeDisplay} verdict={state.verdict} />
 
+          {state.finished && state.runId && (
+            <RunActionBar
+              runId={state.runId}
+              enabled={state.verdict === "verified"}
+            />
+          )}
+
           {state.attempts.length > 0 && <SqlAttemptsPanel attempts={state.attempts} />}
 
           {state.error && (
@@ -152,15 +195,9 @@ export default function Home() {
             <p className="text-xs text-neutral-400">
               {state.stats.attempts} 次尝试 · {state.stats.llmCalls} 次模型调用 ·{" "}
               {state.stats.tokensInput + state.stats.tokensOutput} tokens ·{" "}
-              {state.stats.elapsedMs} ms ·{" "}
-              <a href={`/runs/${state.runId}`} className="underline hover:text-neutral-600">
-                查看历史回放
-              </a>{" "}
-              · <Link href="/reports" className="underline hover:text-neutral-600">固化报表</Link>
+              {state.stats.elapsedMs} ms
             </p>
           )}
-
-          <SaveReportButton runId={state.runId ?? ""} enabled={state.finished && state.verdict === "verified"} />
         </div>
       )}
     </main>
