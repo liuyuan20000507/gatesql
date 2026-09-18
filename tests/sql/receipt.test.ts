@@ -59,15 +59,27 @@ describe("buildReceipt（5C：AST 识别 + 实际 COUNT）", () => {
     expect(r.excluded).toEqual([{ status: "已取消", count: 1 }]);
   });
 
-  it("SQL 无状态约束 → 无排除计数，按时间翻译判定", () => {
+  it("纯计数查询 → 无口径声明义务，fullyTranslated true（6B 实测误伤修复）", () => {
     const r = buildReceipt({
-      sql: "SELECT COUNT(*) AS n FROM customers",
+      sql: "SELECT COUNT(DISTINCT customer_id) AS n FROM orders",
       resolution: null,
       asOf: "2026-08-31",
       shopDbPath: makeShopDb(),
     });
     expect(r.filters).toEqual([]);
     expect(r.excluded).toEqual([]);
+    expect(r.fullyTranslated).toBe(true);
+    // 卡片的 method 不得对非金额查询谎称「按成交小计汇总」
+    expect(r.method).toBe("按查询结果直接统计");
+  });
+
+  it("金额聚合但无状态约束 → 有义务却说明不了，如实 false", () => {
+    const r = buildReceipt({
+      sql: "SELECT SUM(amount) AS total FROM order_items",
+      resolution: null,
+      asOf: "2026-08-31",
+      shopDbPath: makeShopDb(),
+    });
     expect(r.fullyTranslated).toBe(false);
   });
 

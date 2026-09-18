@@ -3,6 +3,10 @@
  * 并去 shop.db 实际 COUNT 被排除的订单 —— 卡片上的每个数字都来自代码，
  * 模型碰不到它（03-api-contract.md 的兑现：「已排除已取消 1873 单」）。
  *
+ * fullyTranslated 的语义：**有义务说明的口径是否都说明白了**。
+ * 义务边界与 lint 的 R1 触发条件对齐（AST 含 SUM/AVG 金额聚合）——
+ * 纯计数等无金额聚合的查询本就没有口径声明义务，不算翻译不全（6B 实测误伤修复）。
+ *
  * 策略：解析失败 / 数据库不可用 → 如实落 fullyTranslated=false，
  * 绝不猜一个数字填上去。
  */
@@ -59,6 +63,23 @@ export function sqlPinsCompletedAst(ast: unknown): boolean {
 }
 
 /**
+ * AST 是否含 SUM/AVG 金额聚合。与 lint ruleR1 的触发条件刻意保持一致：
+ * lint 要求说明口径的查询范围 = 回执必须翻译的范围，二者不应对不上。
+ */
+function hasMoneyAggregate(ast: unknown): boolean {
+  const walk = (node: unknown): boolean => {
+    if (Array.isArray(node)) return node.some(walk);
+    if (!isRecord(node)) return false;
+    if (node.type === "aggr_func" && typeof node.name === "string") {
+      const name = node.name.toUpperCase();
+      if (name === "SUM" || name === "AVG") return true;
+    }
+    return Object.values(node).some(walk);
+  };
+  return walk(ast);
+}
+
+/**
  * 构建回执。shopDbPath 为 null（或库不可用）时跳过 COUNT，绝不猜数。
  */
 export function buildReceipt(input: {
@@ -70,7 +91,7 @@ export function buildReceipt(input: {
   const base = {
     scope: input.resolution ? `${input.resolution.from} 至 ${input.resolution.to}` : "全时段",
     filters: [] as string[],
-    method: "按明细行成交小计汇总",
+    method: "按查询结果直接统计",
     dataUntil: input.asOf,
     coverage: "见结果表格",
     excluded: [] as ReceiptExcluded[],
@@ -79,16 +100,25 @@ export function buildReceipt(input: {
   if (input.sql === null) return { ...base, fullyTranslated: input.resolution !== null };
 
   let pinned = false;
+  let money = false;
   try {
     const ast = new Parser().astify(input.sql, {
       // 与 lint.ts 同款断言：上游类型声明与运行时实参不一致（第 2 周实测）
       databaseType: "sqlite",
     } as never);
+    money = hasMoneyAggregate(ast);
     pinned = sqlPinsCompletedAst(ast);
   } catch {
     return { ...base, fullyTranslated: false };
   }
-  if (!pinned) return { ...base, fullyTranslated: input.resolution !== null };
+  if (money) base.method = "按明细行成交小计汇总";
+
+  if (!pinned) {
+    // 未认出 status='已完成' 形状：
+    //   有金额聚合 → R1 口径义务未说明白，如实 false；
+    //   无金额聚合 → 本来就没有口径声明义务，不算翻译不全
+    return { ...base, fullyTranslated: !money };
+  }
 
   base.filters = ["订单状态=已完成"];
   let countsOk = false;
@@ -116,5 +146,5 @@ export function buildReceipt(input: {
       countsOk = false;
     }
   }
-  return { ...base, fullyTranslated: countsOk || input.resolution !== null };
+  return { ...base, fullyTranslated: countsOk };
 }
