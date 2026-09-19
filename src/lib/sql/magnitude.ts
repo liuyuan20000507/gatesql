@@ -68,6 +68,18 @@ function analyze(sql: string): SumShape | null {
   return shape;
 }
 
+/**
+ * 构造控制查询：剥掉 WHERE 里的业务过滤（status/channel/level 等），保留时间条件，
+ * JOIN ON 原样保留。无 WHERE 时返回 null（不存在业务过滤，无需对比）。
+ * checkMagnitude 与回执的排除金额合计共用此逻辑，保证两处口径一致。
+ */
+export function buildControlQuery(sql: string): string | null {
+  const w = splitWhere(sql);
+  if (!w) return null;
+  const kept = w.conds.filter((c) => TIME_COLUMN.test(c));
+  return (kept.length > 0 ? `${w.prefix.trim()} WHERE ${kept.join(" AND ")}` : w.prefix.trim()) + w.tail;
+}
+
 export function checkMagnitude(input: {
   sql: string;
   columns: string[];
@@ -89,11 +101,8 @@ export function checkMagnitude(input: {
   }
 
   // 控制查询：剥掉 WHERE 里的业务过滤（status/channel/level 等），保留时间条件
-  const w = splitWhere(input.sql);
-  if (!w) return { status: "skip", reason: "无 WHERE 子句，不存在业务过滤，无需对比" };
-  const kept = w.conds.filter((c) => TIME_COLUMN.test(c));
-  const controlSql =
-    (kept.length > 0 ? `${w.prefix.trim()} WHERE ${kept.join(" AND ")}` : w.prefix.trim()) + w.tail;
+  const controlSql = buildControlQuery(input.sql);
+  if (!controlSql) return { status: "skip", reason: "无 WHERE 子句，不存在业务过滤，无需对比" };
 
   if (!input.shopDbPath) return { status: "skip", reason: "无数据库连接" };
   let control: number | null = null;

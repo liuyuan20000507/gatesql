@@ -15,6 +15,8 @@ import { DatabaseSync } from "node:sqlite";
 
 import { Parser } from "node-sql-parser";
 
+import { buildControlQuery } from "@/lib/sql/magnitude";
+
 export interface ReceiptExcluded {
   status: string;
   count: number;
@@ -28,6 +30,12 @@ export interface ReceiptPayload {
   coverage: string;
   fullyTranslated: boolean;
   excluded: ReceiptExcluded[];
+  /** 金额查询引用了成交单价（unit_price）而非标价时为 true —— 把 R2 口径亮给用户 */
+  unitPriceUsed: boolean;
+  /** 统计范围末端越过数据水位（asOf）—— 提示范围可能超出数据覆盖 */
+  outOfWatermark: boolean;
+  /** 已排除订单的金额合计 = 同范围无过滤控制总数 − 结果值；算不出时为 null */
+  excludedMoneyTotal: number | null;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -79,14 +87,28 @@ function hasMoneyAggregate(ast: unknown): boolean {
   return walk(ast);
 }
 
+/** AST 是否引用了成交单价列（unit_price）——guard 重建会带反引号，用序列化匹配 */
+function referencesUnitPrice(ast: unknown): boolean {
+  const walk = (node: unknown): boolean => {
+    if (Array.isArray(node)) return node.some(walk);
+    if (!isRecord(node)) return false;
+    if (node.type === "column_ref" && JSON.stringify(node).includes("unit_price")) return true;
+    return Object.values(node).some(walk);
+  };
+  return walk(ast);
+}
+
 /**
  * 构建回执。shopDbPath 为 null（或库不可用）时跳过 COUNT，绝不猜数。
+ * resultValue：loop 传入的结果金额值（仅单行结果时有意义），
+ * 用于计算「已排除订单金额合计 = 同范围无过滤控制总数 − 结果值」。
  */
 export function buildReceipt(input: {
   sql: string | null;
   resolution: { from: string; to: string } | null;
   asOf: string;
   shopDbPath: string | null;
+  resultValue?: number;
 }): ReceiptPayload {
   const base = {
     scope: input.resolution
@@ -99,12 +121,16 @@ export function buildReceipt(input: {
     dataUntil: input.asOf,
     coverage: "见结果表格",
     excluded: [] as ReceiptExcluded[],
+    unitPriceUsed: false,
+    outOfWatermark: input.resolution ? input.resolution.to > input.asOf : false,
+    excludedMoneyTotal: null as number | null,
   };
 
   if (input.sql === null) return { ...base, fullyTranslated: input.resolution !== null };
 
   let pinned = false;
   let money = false;
+  let usesUnitPrice = false;
   try {
     const ast = new Parser().astify(input.sql, {
       // 与 lint.ts 同款断言：上游类型声明与运行时实参不一致（第 2 周实测）
@@ -112,10 +138,12 @@ export function buildReceipt(input: {
     } as never);
     money = hasMoneyAggregate(ast);
     pinned = sqlPinsCompletedAst(ast);
+    usesUnitPrice = referencesUnitPrice(ast);
   } catch {
     return { ...base, fullyTranslated: false };
   }
   if (money) base.method = "按明细行成交小计汇总";
+  if (money && usesUnitPrice) base.unitPriceUsed = true;
 
   if (!pinned) {
     // 未认出 status='已完成' 形状：
@@ -143,6 +171,16 @@ export function buildReceipt(input: {
           base.excluded.push({ status: r.status, count: Number(r.n) });
         }
         countsOk = true;
+        // 排除金额合计 = 同范围无过滤控制总数 − 结果值（两者都到手才算，绝不猜）
+        if (typeof input.resultValue === "number" && Number.isFinite(input.resultValue)) {
+          const controlSql = buildControlQuery(input.sql);
+          if (controlSql) {
+            const crow = db.prepare(controlSql).get() as Record<string, unknown> | undefined;
+            const raw = crow ? Object.values(crow)[0] : null;
+            const n = typeof raw === "number" ? raw : Number(raw);
+            if (Number.isFinite(n)) base.excludedMoneyTotal = n - input.resultValue;
+          }
+        }
       } finally {
         db.close();
       }

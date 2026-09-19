@@ -15,21 +15,33 @@ afterEach(() => {
   dbFiles.splice(0).forEach((f) => rmSync(f, { force: true }));
 });
 
-/** 最小 shop.db：orders(status, created_at) */
+/** 最小 shop.db：orders(status, created_at) + order_items(amount)
+ *  明细金额：已完成 3 单各 100/200/300（合计 600）；已取消 5 单挂 250；已退款 2 单挂 80；全部明细合计 930 */
 function makeShopDb(): string {
   const dir = path.join("data", "test-app");
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `receipt_test_${crypto.randomUUID()}.db`);
   const db = new DatabaseSync(file);
-  db.exec("CREATE TABLE orders (id INTEGER PRIMARY KEY, status TEXT, created_at TEXT)");
-  const ins = db.prepare("INSERT INTO orders (status, created_at) VALUES (?, ?)");
+  db.exec(`
+    CREATE TABLE orders (id INTEGER PRIMARY KEY, status TEXT, created_at TEXT);
+    CREATE TABLE order_items (id INTEGER PRIMARY KEY, order_id INTEGER, amount REAL, unit_price REAL);
+  `);
+  const insOrder = db.prepare("INSERT INTO orders (id, status, created_at) VALUES (?, ?, ?)");
+  const insItem = db.prepare("INSERT INTO order_items (id, order_id, amount, unit_price) VALUES (?, ?, ?, ?)");
   // 已完成 3（其中 2 单在 2026-08），已取消 5（1 单在 2026-08），已退款 2
-  ins.run("已完成", "2026-08-10");
-  ins.run("已完成", "2026-08-20");
-  ins.run("已完成", "2026-07-01");
-  ins.run("已取消", "2026-08-15");
-  for (let i = 0; i < 4; i++) ins.run("已取消", "2026-05-01");
-  for (let i = 0; i < 2; i++) ins.run("已退款", "2026-06-01");
+  insOrder.run(1, "已完成", "2026-08-10");
+  insOrder.run(2, "已完成", "2026-08-20");
+  insOrder.run(3, "已完成", "2026-07-01");
+  insOrder.run(4, "已取消", "2026-08-15");
+  for (let i = 0; i < 4; i++) insOrder.run(5 + i, "已取消", "2026-05-01");
+  insOrder.run(9, "已退款", "2026-06-01");
+  insOrder.run(10, "已退款", "2026-06-02");
+  insItem.run(1, 1, 100, 100);
+  insItem.run(2, 2, 200, 200);
+  insItem.run(3, 3, 300, 300);
+  for (let i = 0; i < 5; i++) insItem.run(4 + i, 4, 50, 50);
+  insItem.run(9, 9, 40, 40);
+  insItem.run(10, 10, 40, 40);
   db.close();
   dbFiles.push(file);
   return file;
@@ -93,6 +105,44 @@ describe("buildReceipt（5C：AST 识别 + 实际 COUNT）", () => {
     const r = buildReceipt({ sql: AMOUNT_SQL, resolution: null, asOf: "2026-08-31", shopDbPath: null });
     expect(r.excluded).toEqual([]);
     expect(r.fullyTranslated).toBe(false);
+  });
+
+  it("unit_price 引用 → 计价口径亮明；排除金额合计 = 控制总数 − 结果值", () => {
+    const r = buildReceipt({
+      sql: "SELECT SUM(oi.unit_price) AS v FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE o.status = '已完成'",
+      resolution: null,
+      asOf: "2026-08-31",
+      shopDbPath: makeShopDb(),
+      resultValue: 600,
+    });
+    expect(r.unitPriceUsed).toBe(true);
+    // 控制查询剥掉 status、保留时间（无）→ 全部明细 930；排除金额 = 930 − 600 = 330
+    expect(r.excludedMoneyTotal).toBe(330);
+  });
+
+  it("未传 resultValue → 排除金额合计为 null（绝不猜）", () => {
+    const r = buildReceipt({ sql: AMOUNT_SQL, resolution: null, asOf: "2026-08-31", shopDbPath: makeShopDb() });
+    expect(r.excludedMoneyTotal).toBeNull();
+  });
+
+  it("单日 resolution → scope 只显示当天；范围越过水位 → outOfWatermark 标记", () => {
+    const r = buildReceipt({
+      sql: AMOUNT_SQL,
+      resolution: { from: "2026-08-05", to: "2026-08-05" },
+      asOf: "2026-08-31",
+      shopDbPath: makeShopDb(),
+    });
+    expect(r.scope).toBe("2026-08-05");
+    expect(r.outOfWatermark).toBe(false);
+
+    const beyond = buildReceipt({
+      sql: AMOUNT_SQL,
+      resolution: { from: "2026-08-01", to: "2027-01-31" },
+      asOf: "2026-08-31",
+      shopDbPath: makeShopDb(),
+    });
+    expect(beyond.scope).toBe("2026-08-01 至 2027-01-31");
+    expect(beyond.outOfWatermark).toBe(true);
   });
 });
 

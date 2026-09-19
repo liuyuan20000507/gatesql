@@ -31,6 +31,27 @@ export function ReceiptCard({ receipt }: { receipt: NonNullable<RunState["receip
             </dd>
           </div>
         )}
+        {receipt.excludedMoneyTotal != null && (
+          <div>
+            <dt className="inline font-medium text-neutral-600">已排除金额合计： </dt>
+            <dd className="inline">
+              {receipt.excludedMoneyTotal.toLocaleString("zh-CN", { minimumFractionDigits: 2 })} 元
+              （含全部过滤条件）
+            </dd>
+          </div>
+        )}
+        {receipt.unitPriceUsed && (
+          <div>
+            <dt className="inline font-medium text-neutral-600">计价口径： </dt>
+            <dd className="inline">金额按成交单价（unit_price）计算，非商品标价</dd>
+          </div>
+        )}
+        {receipt.outOfWatermark && (
+          <div className="text-amber-700">
+            <dt className="inline font-medium">⚠ 统计范围超出数据覆盖： </dt>
+            <dd className="inline">数据仅截至 {receipt.dataUntil}，范围末端无数据</dd>
+          </div>
+        )}
         <div>
           <dt className="inline font-medium text-neutral-600">计算方式： </dt>
           <dd className="inline">{receipt.method}</dd>

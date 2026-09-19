@@ -591,11 +591,19 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
     }
 
     const tReceipt = Date.now();
+    // 排除金额合计的原料：仅单行结果时取第一格（多行结果的金额列不可定位，诚实跳过）
+    let resultValue: number | undefined;
+    if (success && success.rows.length === 1) {
+      const cell = success.rows[0][0];
+      const n = typeof cell === "number" ? cell : Number(cell);
+      if (Number.isFinite(n)) resultValue = n;
+    }
     const receipt = buildReceipt({
       resolution,
       sql: lastSql,
       asOf,
       shopDbPath: env.SHOP_DB_PATH,
+      resultValue,
     });
     deps.emit({ type: "receipt", ...receipt });
     trace({

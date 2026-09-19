@@ -93,6 +93,12 @@ export interface RunState {
     coverage: string;
     /** 5C：仅已完成口径下被排除的订单实际计数（全库或范围内） */
     excluded: Array<{ status: string; count: number }>;
+    /** 金额查询引用成交单价（R2 口径亮明）；旧事件无此字段 */
+    unitPriceUsed?: boolean;
+    /** 统计范围末端越过数据水位；旧事件无此字段 */
+    outOfWatermark?: boolean;
+    /** 已排除订单金额合计 = 同范围无过滤控制总数 − 结果值；算不出时缺省 */
+    excludedMoneyTotal?: number | null;
     fullyTranslated: boolean;
   } | null;
 
@@ -199,6 +205,9 @@ export function reduceEvent(state: RunState, event: GateSqlEvent): RunState {
           dataUntil: event.dataUntil,
           coverage: event.coverage,
           excluded: event.excluded ?? [],
+          unitPriceUsed: event.unitPriceUsed,
+          outOfWatermark: event.outOfWatermark,
+          excludedMoneyTotal: event.excludedMoneyTotal,
           fullyTranslated: event.fullyTranslated,
         },
       };

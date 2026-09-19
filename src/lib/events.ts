@@ -190,6 +190,12 @@ export const GateSqlEventSchema = z.discriminatedUnion("type", [
     coverage: z.string(),
     /** 5C：口径为「仅已完成」时，被排除订单的实际 COUNT（AST+库，模型不可见） */
     excluded: z.array(z.object({ status: z.string(), count: z.number() })),
+    /** 金额查询引用了成交单价（R2 口径亮明）；旧事件无此字段 */
+    unitPriceUsed: z.boolean().optional(),
+    /** 统计范围末端越过数据水位；旧事件无此字段 */
+    outOfWatermark: z.boolean().optional(),
+    /** 已排除订单金额合计 = 同范围无过滤控制总数 − 结果值；算不出时缺省 */
+    excludedMoneyTotal: z.number().nullable().optional(),
     fullyTranslated: z.boolean(),
   }),
 
