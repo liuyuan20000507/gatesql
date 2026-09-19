@@ -1,4 +1,7 @@
+# pnpm 12 构建脚本白名单（allowBuilds）：
+#   esbuild / unrs-resolver 的 postinstall 需要执行（vitest/tsx、eslint 依赖），显式放行；
+#   sharp 镜像里用不到，显式禁止——不配置时 pnpm 12 直接报 ERR_PNPM_IGNORED_BUILDS 中止安装
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true
+  unrs-resolver: true
   sharp: false
-  unrs-resolver: false
