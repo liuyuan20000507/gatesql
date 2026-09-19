@@ -27,6 +27,7 @@ import { resolveDefaultAsOf } from "@/lib/db/schema";
 import { getConfig } from "@/lib/env";
 import type { GateSqlEvent, ChartSpec } from "@/lib/events";
 import { explainCost } from "@/lib/sql/explain";
+import { checkMagnitude } from "@/lib/sql/magnitude";
 import { buildEmptyResultProbes } from "@/lib/sql/probe";
 import { QueryTimeoutError, SqlExecutor } from "@/lib/sql/executor";
 import { guardSql } from "@/lib/sql/guard";
@@ -548,6 +549,20 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
           verdictReasons.push(
             `该口径下没有数据；单独放宽「${emptyReason.suspectCondition}」后可见 ${emptyReason.countIfRelaxed} 行`,
           );
+        }
+      }
+      // 8(d)：量级校验 —— 金额聚合结果对比「去业务过滤、留时间范围」的控制总数，
+      // 占比 >100% 或 <1% 标红降级。skip（非金额/分组/空集形态）时静默，不越界空集体检。
+      if (lastSql) {
+        const mag = checkMagnitude({
+          sql: lastSql,
+          columns: success.columns,
+          rows: success.rows,
+          shopDbPath: env.SHOP_DB_PATH,
+        });
+        if (mag.status === "fail") {
+          checks.push({ kind: "magnitude", passed: false, detail: mag.detail });
+          warnSeen = true;
         }
       }
       // 5D：窗口越过数据水位线 → 末点不完整标记（纯代码判定，前端画虚线+横幅）

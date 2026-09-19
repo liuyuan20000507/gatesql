@@ -1,0 +1,133 @@
+/**
+ * 量级校验（8d，docs/05 步骤 8(d)）：金额聚合结果与「去掉业务过滤、保留时间
+ * 范围」的控制总数对比 —— 结果占比 >100%（逻辑不可能，疑似口径/JOIN 错误）
+ * 或 <1%（业务过滤后所剩无几，疑似口径过严）→ fail，由 loop 降级未核验。
+ *
+ * 设计要点：
+ *   - 控制查询必须保留时间条件。时间范围是问题的口径而非业务过滤——若连时间
+ *     也剥掉，「问某一天的销售额」会对比全库总额，正常答案必然 <1%，全是误报。
+ *   - 只对「单一 SUM、无 GROUP BY」表态。AVG 与分组结果的占比没有明确语义，
+ *     宁可 skip 也不猜。多列/多聚合同样 skip。
+ *   - 结果为 NULL / 非数值时不表态——空集形态由步骤 8 的空集体检负责，不越界。
+ */
+
+import { DatabaseSync } from "node:sqlite";
+
+import { Parser } from "node-sql-parser";
+
+import { splitWhere } from "@/lib/sql/probe";
+
+export type MagnitudeVerdict =
+  | { status: "skip"; reason: string }
+  | { status: "ok"; ratio: number }
+  | { status: "fail"; ratio: number; detail: string };
+
+const MIN_RATIO = 0.01; // <1%：业务过滤后所剩无几
+const MAX_RATIO = 1; // >100%：超过同范围无过滤控制总数，逻辑不可能
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+const TIME_COLUMN = /created_at|registered_at/i;
+
+interface SumShape {
+  sumCount: number;
+  aggCount: number;
+  hasAvg: boolean;
+  hasGroupBy: boolean;
+}
+
+/** 解析 AST 并统计聚合形态：SUM 个数、总聚合数、是否含 AVG、是否分组 */
+function analyze(sql: string): SumShape | null {
+  let ast: unknown;
+  try {
+    ast = new Parser().astify(sql, { databaseType: "sqlite" } as never);
+  } catch {
+    return null;
+  }
+  if (!isRecord(ast) || ast.type !== "select") return null;
+
+  const shape: SumShape = { sumCount: 0, aggCount: 0, hasAvg: false, hasGroupBy: false };
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (!isRecord(node)) return;
+    if (node.type === "aggr_func" && typeof node.name === "string") {
+      shape.aggCount++;
+      const name = node.name.toUpperCase();
+      if (name === "SUM") shape.sumCount++;
+      if (name === "AVG") shape.hasAvg = true;
+    }
+    Object.values(node).forEach(walk);
+  };
+  walk(ast);
+  shape.hasGroupBy = ast.groupby !== null && typeof ast.groupby === "object";
+  return shape;
+}
+
+export function checkMagnitude(input: {
+  sql: string;
+  columns: string[];
+  rows: unknown[][];
+  shopDbPath: string | null;
+}): MagnitudeVerdict {
+  const shape = analyze(input.sql);
+  if (!shape) return { status: "skip", reason: "SQL 无法解析" };
+  if (shape.hasGroupBy) return { status: "skip", reason: "分组结果不做量级对比" };
+  if (shape.aggCount !== 1 || shape.sumCount !== 1 || shape.hasAvg) {
+    return { status: "skip", reason: "非单一 SUM 聚合，占比无明确语义" };
+  }
+
+  // 结果值：取第一行第一个格子。NULL / 非数值交给空集体检，这里不表态。
+  const cell = input.rows[0]?.[0];
+  const value = typeof cell === "number" ? cell : Number(cell);
+  if (!Number.isFinite(value)) {
+    return { status: "skip", reason: "结果非数值（空集形态由其他检查负责）" };
+  }
+
+  // 控制查询：剥掉 WHERE 里的业务过滤（status/channel/level 等），保留时间条件
+  const w = splitWhere(input.sql);
+  if (!w) return { status: "skip", reason: "无 WHERE 子句，不存在业务过滤，无需对比" };
+  const kept = w.conds.filter((c) => TIME_COLUMN.test(c));
+  const controlSql =
+    (kept.length > 0 ? `${w.prefix.trim()} WHERE ${kept.join(" AND ")}` : w.prefix.trim()) + w.tail;
+
+  if (!input.shopDbPath) return { status: "skip", reason: "无数据库连接" };
+  let control: number | null = null;
+  try {
+    const db = new DatabaseSync(input.shopDbPath, { readOnly: true });
+    try {
+      const row = db.prepare(controlSql).get() as Record<string, unknown> | undefined;
+      const raw = row ? Object.values(row)[0] : null;
+      const n = typeof raw === "number" ? raw : Number(raw);
+      if (Number.isFinite(n)) control = n;
+    } finally {
+      db.close();
+    }
+  } catch {
+    return { status: "skip", reason: "控制查询执行失败，不表态" };
+  }
+  if (control === null || control <= 0) {
+    return { status: "skip", reason: "控制总数为 0 或非数值，无对比基准" };
+  }
+
+  const ratio = value / control;
+  if (ratio > MAX_RATIO) {
+    return {
+      status: "fail",
+      ratio,
+      detail: `结果 ${value} 超过同范围无过滤控制总数 ${control}（占比 ${(ratio * 100).toFixed(1)}%），逻辑不可能，疑似口径或 JOIN 错误`,
+    };
+  }
+  if (ratio < MIN_RATIO) {
+    return {
+      status: "fail",
+      ratio,
+      detail: `结果仅占同范围无过滤控制总数 ${control} 的 ${(ratio * 100).toFixed(2)}%，业务过滤后所剩无几，请确认口径是否符合预期`,
+    };
+  }
+  return { status: "ok", ratio };
+}
