@@ -209,6 +209,8 @@ export const GateSqlEventSchema = z.discriminatedUnion("type", [
         z.object({
           label: z.string(),
           description: z.string(),
+          /** 词典选项的追加话术（必含 disambiguator）；「可查表」类提示无此字段 */
+          clarifyPhrase: z.string().optional(),
         }),
       )
       .optional(),

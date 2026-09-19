@@ -1,9 +1,11 @@
 export interface Clarification {
   label: string;
   description: string;
+  /** 词典选项的追加话术；有此字段 = 点击后自动重问（多轮澄清），无则退回填输入框 */
+  clarifyPhrase?: string;
 }
 
-function ClarifyItem(props: { c: Clarification; onClarify?: (q: string) => void }) {
+function ClarifyItem(props: { c: Clarification; onClarify?: (c: Clarification) => void }) {
   const body = (
     <span>
       <span className="font-medium text-red-900">{props.c.label}</span>
@@ -14,7 +16,7 @@ function ClarifyItem(props: { c: Clarification; onClarify?: (q: string) => void 
     return (
       <button
         type="button"
-        onClick={() => props.onClarify?.(`${props.c.label}：${props.c.description}`)}
+        onClick={() => props.onClarify?.(props.c)}
         className="block w-full rounded border border-red-300 bg-white px-2 py-1.5 text-left text-xs hover:bg-red-50"
       >
         {body}
@@ -28,7 +30,7 @@ export function VerdictPanel(props: {
   verdict: "verified" | "unverified" | "refused" | null;
   reasons: string[];
   clarifications: Clarification[];
-  onClarify?: (question: string) => void;
+  onClarify?: (c: Clarification) => void;
 }) {
   if (props.verdict === "refused") {
     return (

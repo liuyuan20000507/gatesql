@@ -1,33 +1,54 @@
 import { describe, expect, it } from "vitest";
 
-import { findAmbiguity, formatClarifyReason } from "@/lib/agent/clarify";
+import { LEXICON, findAmbiguity, formatClarifyReason } from "@/lib/agent/clarify";
 
-describe("findAmbiguity（口径歧义词典）", () => {
-  it("E4 原题 → 命中利润率词条", () => {
-    const e = findAmbiguity("我们的利润率怎么样？");
-    expect(e?.id).toBe("profit_margin");
-    expect(e?.options.length).toBeGreaterThanOrEqual(2);
+describe("findAmbiguity（步骤 2.5 歧义词典）", () => {
+  it("关键词命中 → 返回词条", () => {
+    expect(findAmbiguity("上个月的利润率是多少")?.id).toBe("profit_margin");
+    expect(findAmbiguity("复购率怎么算")?.id).toBe("repeat_rate");
+    expect(findAmbiguity("客单价是多少")?.id).toBe("avg_order_value");
+    expect(findAmbiguity("卖得最好的商品")?.id).toBe("top_seller_metric");
+    expect(findAmbiguity("退货率是多少")?.id).toBe("refund_rate");
   });
 
-  it("E3 原题 → 命中复购率词条", () => {
-    expect(findAmbiguity("上个月的复购率是多少？")?.id).toBe("repeat_rate");
+  it("关键词 + 任一 disambiguator → 放行（null）", () => {
+    expect(findAmbiguity("按毛利口径的利润率")).toBeNull();
+    expect(findAmbiguity("自然月口径的复购率")).toBeNull();
+    expect(findAmbiguity("按每单平均的客单价")).toBeNull();
+    expect(findAmbiguity("按销售额排名卖得最好的商品")).toBeNull();
+    expect(findAmbiguity("按订单数计算的退货率")).toBeNull();
   });
 
-  it("用户已点明口径 → 放行（拦的是没说清，不是提了词）", () => {
-    expect(findAmbiguity("按毛利口径算一下利润率")).toBeNull();
-    expect(findAmbiguity("90 天窗口内的复购率是多少")).toBeNull();
+  it("无关键词 → null", () => {
+    expect(findAmbiguity("上个月的销售额是多少")).toBeNull();
+    expect(findAmbiguity("有多少客户下过单")).toBeNull();
+  });
+});
+
+describe("防循环：每个选项的 clarifyPhrase 必让第二轮放行（多轮澄清的生命线）", () => {
+  // 若某选项话术缺 disambiguator，用户点它会再次被拦 → 弹同样选项 → 无限打转
+  it("全部词条 × 全部选项：原问题 + clarifyPhrase 不再命中词典", () => {
+    for (const entry of LEXICON) {
+      for (const opt of entry.options) {
+        const refined = `上个月的${entry.keywords[0]}是多少${opt.clarifyPhrase}`;
+        expect(findAmbiguity(refined), `${entry.id} / ${opt.label}：话术「${opt.clarifyPhrase}」未通关`).toBeNull();
+      }
+    }
   });
 
-  it("毛利率不算歧义（词面上不含「利润率」，语义上也已具体）", () => {
-    expect(findAmbiguity("各分类的毛利率是多少？")).toBeNull();
+  it("全部选项的 clarifyPhrase 必含本词条至少一个 disambiguator", () => {
+    for (const entry of LEXICON) {
+      for (const opt of entry.options) {
+        const hit = entry.disambiguators.some((d) => opt.clarifyPhrase.includes(d));
+        expect(hit, `${entry.id} / ${opt.label}`).toBe(true);
+      }
+    }
   });
 
-  it("无关问题 → null", () => {
-    expect(findAmbiguity("各分类的已完成销售额")).toBeNull();
-  });
-
-  it("拒答理由可读且点名歧义词", () => {
-    const e = findAmbiguity("我们的利润率怎么样？");
-    expect(e && formatClarifyReason(e)).toContain("利润率");
+  it("formatClarifyReason 输出含关键词且提示重新提问", () => {
+    const entry = LEXICON[0];
+    const reason = formatClarifyReason(entry);
+    expect(reason).toContain(entry.keywords[0]);
+    expect(reason).toContain("口径");
   });
 });

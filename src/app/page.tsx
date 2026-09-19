@@ -41,6 +41,8 @@ export default function Home() {
     [],
   );
   const [input, setInput] = useState("");
+  /** 当前 run 的问题原文 —— 澄清选项点击时拼回话术用 */
+  const [askedQuestion, setAskedQuestion] = useState("");
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -70,27 +72,33 @@ export default function Home() {
     [],
   );
 
-  const send = useCallback(async () => {
-    const question = input.trim();
-    if (!question || streaming) return;
+  const sendQuestion = useCallback(
+    async (question: string) => {
+      const q = question.trim();
+      if (!q || streaming) return;
 
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
-    setStreaming(true);
-    dispatch({ kind: "reset" });
-    eventsRef.current = []; // 新提问：事件快照从零开始积累，结束后覆盖旧现场
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      setStreaming(true);
+      setAskedQuestion(q);
+      dispatch({ kind: "reset" });
+      eventsRef.current = []; // 新提问：事件快照从零开始积累，结束后覆盖旧现场
 
-    try {
-      await postChatStream("/api/chat", { question, conversationId: null }, dispatchEvent, ac.signal);
-    } catch (err) {
-      if (!ac.signal.aborted) {
-        dispatchEvent({ type: "error", code: "LLM_ERROR", message: String(err) });
+      try {
+        await postChatStream("/api/chat", { question: q, conversationId: null }, dispatchEvent, ac.signal);
+      } catch (err) {
+        if (!ac.signal.aborted) {
+          dispatchEvent({ type: "error", code: "LLM_ERROR", message: String(err) });
+        }
+      } finally {
+        setStreaming(false);
       }
-    } finally {
-      setStreaming(false);
-    }
-  }, [input, streaming, dispatchEvent]);
+    },
+    [streaming, dispatchEvent],
+  );
+
+  const send = useCallback(() => void sendQuestion(input), [sendQuestion, input]);
 
   const hasRun = state.runId !== null;
   const inFlight = streaming && !state.finished;
@@ -166,9 +174,15 @@ export default function Home() {
             verdict={state.verdict}
             reasons={state.verdictReasons}
             clarifications={state.clarifications}
-            onClarify={(q) => {
-              setInput(q);
-              window.scrollTo({ top: 0, behavior: "smooth" });
+            onClarify={(c) => {
+              // 词典选项带 clarifyPhrase → 拼回原问题自动重问（多轮澄清）；
+              // 「可查表」类提示无话术 → 退回旧行为：填入输入框由用户编辑
+              if (c.clarifyPhrase && askedQuestion) {
+                void sendQuestion(`${askedQuestion}${c.clarifyPhrase}`);
+              } else {
+                setInput(`${c.label}：${c.description}`);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
             }}
           />
 
