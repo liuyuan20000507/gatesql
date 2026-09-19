@@ -3,6 +3,10 @@ import Link from "next/link";
 import { listReports, openAppDb } from "@/lib/db/app";
 
 /** 报表列表（5G）：固化的 SQL 目录。点「重跑」直接执行存好的 SQL，不调模型。 */
+// 渲染期读 app.db：必须按需渲染 —— 否则 next build 的预渲染阶段会去开一个不存在的数据库
+// （Docker 构建阶段 data/ 不在上下文里，正是这个坑暴露的）
+export const dynamic = "force-dynamic";
+
 export default function ReportsPage() {
   const db = openAppDb();
   let reports;

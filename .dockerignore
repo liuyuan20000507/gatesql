@@ -1,0 +1,33 @@
+# 版本控制与编辑器
+.git
+.claude
+.idea
+.vscode
+
+# 依赖与构建产物（容器内重新安装/构建）
+node_modules
+.next
+coverage
+
+# 数据文件：容器内由 seed 阶段重新生成，不拷贝宿主机数据
+data
+
+# 密钥与本地配置：容器走无 key replay 模式，绝不把密钥烤进镜像
+.env*
+*.key
+
+# 文档与测试（生产镜像不需要；next build 的类型检查只依赖 src 与配置）
+docs
+tests
+*.md
+!README.md
+
+# 日志与临时产物
+*.log
+logs/
+trace-dump.txt
+scripts/_tmp_*
+
+# Docker 自身
+Dockerfile
+docker-compose.yml

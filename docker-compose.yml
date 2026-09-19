@@ -1,0 +1,25 @@
+services:
+  gatesql:
+    build: .
+    image: gatesql:latest
+    ports:
+      - "3000:3000"
+    environment:
+      # 刻意不配置 LLM_API_KEY：无 key 时应用自动进入 replay 回放模式（6B 无 key 演示）
+      # 如需真实调用，取消下行注释并填入 key
+      # - LLM_API_KEY=your-key
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      # 命名卷首次挂载时从镜像 /app/data 初始化（含生成的 shop.db），
+      # 应用运行时写的 app.db（trace/报表/纠正样本）随卷持久化
+      - gatesql-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r)=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  gatesql-data:
