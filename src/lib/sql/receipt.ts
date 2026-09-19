@@ -89,7 +89,11 @@ export function buildReceipt(input: {
   shopDbPath: string | null;
 }): ReceiptPayload {
   const base = {
-    scope: input.resolution ? `${input.resolution.from} 至 ${input.resolution.to}` : "全时段",
+    scope: input.resolution
+      ? input.resolution.from === input.resolution.to
+        ? input.resolution.from // 单日区间不写「X 至 X」
+        : `${input.resolution.from} 至 ${input.resolution.to}`
+      : "全时段",
     filters: [] as string[],
     method: "按查询结果直接统计",
     dataUntil: input.asOf,

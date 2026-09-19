@@ -40,6 +40,23 @@ type Rule = {
 };
 
 const RULES: Rule[] = [
+  // 特定年月日：2026年8月5日 → 单日区间。必须排在「年月」规则之前——
+  // 否则「2026年8月5日」会被年月规则吃掉前半，日被留在改写文本里（6C 实测 bug）。
+  {
+    regex: /(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]/,
+    resolve: (_asOf, m) => {
+      const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return { from: day, to: day };
+    },
+  },
+  // ISO 日期：2026-08-05 → 单日区间（同上，需在年月规则之前）
+  {
+    regex: /(\d{4})-(\d{1,2})-(\d{1,2})/,
+    resolve: (_asOf, m) => {
+      const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return { from: day, to: day };
+    },
+  },
   // 特定年月：2025年2月
   {
     regex: /(\d{4})\s*年\s*(\d{1,2})\s*月/,
@@ -122,12 +139,13 @@ export function resolveTimeRange(question: string, asOf: string): TimeResolution
     const { from, to } = rule.resolve(asOfDate, match);
     const fromStr = ymd(from);
     const toStr = ymd(to);
+    const sameDay = fromStr === toStr; // 单日区间：展示与改写都收敛为单个日期，避免「X 至 X」噪音
     return {
       expression: match[0],
       from: fromStr,
       to: toStr,
-      display: `${fromStr} ~ ${toStr}`,
-      rewrittenQuestion: question.replace(match[0], `${fromStr} 至 ${toStr}`),
+      display: sameDay ? fromStr : `${fromStr} ~ ${toStr}`,
+      rewrittenQuestion: question.replace(match[0], sameDay ? fromStr : `${fromStr} 至 ${toStr}`),
     };
   }
   return null;
