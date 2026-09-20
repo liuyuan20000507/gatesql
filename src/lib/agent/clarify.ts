@@ -48,7 +48,8 @@ export const LEXICON: AmbiguityEntry[] = [
   {
     id: "avg_order_value",
     keywords: ["客单价"],
-    disambiguators: ["每单", "人均", "每客户"],
+    // 「去重」：题面自带算法说明（如 C3「÷去重订单数」）即视为已点明口径
+    disambiguators: ["每单", "人均", "每客户", "去重"],
     options: [
       { label: "按订单", description: "总销售额 ÷ 订单数：每笔订单平均金额", clarifyPhrase: "（按每单平均计算客单价）" },
       { label: "按客户", description: "总销售额 ÷ 下单客户数：每人平均消费（一人多单会被摊薄）", clarifyPhrase: "（按人均消费计算客单价）" },
@@ -57,7 +58,8 @@ export const LEXICON: AmbiguityEntry[] = [
   {
     id: "top_seller_metric",
     keywords: ["卖得最好", "最畅销", "卖得最差", "最滞销"],
-    disambiguators: ["按销售额", "按销量", "按件数", "按金额"],
+    // 不带「按」前缀：题面「销量排行榜」这种自然表述也要能放行（D5 实测误伤）
+    disambiguators: ["销售额", "销量", "件数", "金额"],
     options: [
       { label: "按销售额", description: "以订单金额合计排名（贵价商品占优）", clarifyPhrase: "（按销售额排名）" },
       { label: "按销售量", description: "以购买件数合计排名（走量商品占优）", clarifyPhrase: "（按销量排名）" },
