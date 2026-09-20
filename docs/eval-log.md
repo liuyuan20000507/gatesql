@@ -320,3 +320,32 @@
 docs/demo-script.md：五镜头 60-90 秒脚本（数字验真 / 拒答澄清 / 空结果 / 自愈回放 / 报表重跑），待作者录制。
 
 ---
+
+---
+
+## 第 6 周 · 6C · live/replay 对齐抽查（2026-09-20）
+
+- **抽样**：30 题每隔 3 取 1（索引 2,5,…,29）= A3, B1, B4, C2, C5, D3, E1, E4, F2, F5，覆盖全部六层
+- **方法**：同一抽样双模式各跑一遍——live 真调模型（LLM_MODE=live）vs replay cassette 回放；逐题对比 verdict 一致性 + 结果行等价（resultsEqual，排行榜题校验行序）；SQL 文本不要求一致
+- **工具**：scripts/spot-check.ts（live / replay / compare 三子命令），结果与报告落盘 eval/spot-check/
+
+### 结果
+
+| 指标 | 值 |
+|---|---|
+| 对齐 | **10/10** |
+| verdict 不一致 | 0 |
+| 结果不等价 | 0 |
+| SQL 文本一致 | 2/10（A3、F5）——其余 8 题 live 写出不同 SQL 但结果与 cassette 全部等价 |
+
+### 归因
+
+零分歧，无需归因。8 题「SQL 不同、结果等价」是模型非确定性的正常表现，
+恰好同时验证了：①cassette 键/回放机制无串键无错位；②结果等价比对器在
+真实「不同 SQL、同结果」场景下判定正确。
+
+### 备注
+
+- live 阶段 D3 触发 1 次自愈重试后通过；E4 在两模式下均 0 次 LLM 调用
+  （歧义词典短路——5A 机制在两种模式下行为一致）
+- 抽查明细：eval/spot-check/{live,replay}.json、report.md

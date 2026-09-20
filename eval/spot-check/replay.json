@@ -1,0 +1,245 @@
+{
+  "mode": "replay",
+  "ranAt": "2026-09-20T06:56:53.498Z",
+  "model": "ark-code-latest",
+  "results": [
+    {
+      "id": "A3",
+      "layer": "简单聚合",
+      "question": "状态为「已完成」的订单一共有多少笔？",
+      "verdict": "verified",
+      "finalStatus": "ok",
+      "attempts": 1,
+      "llmCalls": 2,
+      "rows": {
+        "columns": [
+          "completed_orders"
+        ],
+        "rows": [
+          [
+            8110
+          ]
+        ]
+      },
+      "lastSql": "SELECT COUNT(*) AS completed_orders FROM orders WHERE status = '已完成'",
+      "error": null
+    },
+    {
+      "id": "B1",
+      "layer": "时间筛选",
+      "question": "2025 年 2 月单月的「已完成」销售额是多少？",
+      "verdict": "verified",
+      "finalStatus": "ok",
+      "attempts": 1,
+      "llmCalls": 2,
+      "rows": {
+        "columns": [
+          "total_sales"
+        ],
+        "rows": [
+          [
+            1759197.7
+          ]
+        ]
+      },
+      "lastSql": "SELECT SUM(oi.amount) AS total_sales FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.status = '已完成' AND o.created_at >= '2025-02-01' AND o.created_at <= '2025-02-28'",
+      "error": null
+    },
+    {
+      "id": "B4",
+      "layer": "时间筛选",
+      "question": "近 30 天的「已完成」销售额是多少？",
+      "verdict": "verified",
+      "finalStatus": "ok",
+      "attempts": 1,
+      "llmCalls": 2,
+      "rows": {
+        "columns": [
+          "total_sales"
+        ],
+        "rows": [
+          [
+            2107200.97
+          ]
+        ]
+      },
+      "lastSql": "SELECT SUM(oi.amount) AS total_sales FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.status = '已完成' AND o.created_at >= '2026-08-02' AND o.created_at <= '2026-08-31'",
+      "error": null
+    },
+    {
+      "id": "C2",
+      "layer": "多表JOIN",
+      "question": "华东地区客户的「已完成」销售额是多少？",
+      "verdict": "verified",
+      "finalStatus": "ok",
+      "attempts": 1,
+      "llmCalls": 2,
+      "rows": {
+        "columns": [
+          "total_sales_amount"
+        ],
+        "rows": [
+          [
+            5161328.68
+          ]
+        ]
+      },
+      "lastSql": "SELECT SUM(oi.amount) AS total_sales_amount FROM orders o JOIN order_items oi ON oi.order_id = o.id JOIN customers c ON c.id = o.customer_id WHERE o.status = '已完成' AND c.region = '华东'",
+      "error": null
+    },
+    {
+      "id": "C5",
+      "layer": "多表JOIN",
+      "question": "一笔订单如果包含多个分类的商品，会在每个分类下都计入一笔。按这个规则，各分类各有多少笔「已完成」订单涉及？",
+      "verdict": "verified",
+      "finalStatus": "ok",
+      "attempts": 1,
+      "llmCalls": 2,
+      "rows": {
+        "columns": [
+          "category",
+          "order_count"
+        ],
+        "rows": [
+          [
+            "服饰鞋包",
+            2736
+          ],
+          [
+            "食品生鲜",
+            2734
+          ],
+          [
+            "手机数码",
+            2707
+          ],
+          [
+            "电脑办公",
+            2675
+          ],
+          [
+            "家用电器",
+            2671
+          ]
+        ]
+      },
+      "lastSql": "SELECT p.category, COUNT(DISTINCT o.id) AS order_count FROM orders o JOIN order_items oi ON oi.order_id = o.id JOIN products p ON p.id = oi.product_id WHERE o.status = '已完成' GROUP BY p.category ORDER BY order_count DESC",
+      "error": null
+    },
+    {
+      "id": "D3",
+      "layer": "口径陷阱",
+      "question": "平均每笔订单消费多少钱？",
+      "verdict": "verified",
+      "finalStatus": "ok",
+      "attempts": 1,
+      "llmCalls": 2,
+      "rows": {
+        "columns": [
+          "avg_order_value"
+        ],
+        "rows": [
+          [
+            5057.380856966708
+          ]
+        ]
+      },
+      "lastSql": "SELECT SUM(oi.amount) / COUNT(DISTINCT o.id) AS avg_order_value FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.status = '已完成'",
+      "error": null
+    },
+    {
+      "id": "E1",
+      "layer": "不可答",
+      "question": "员工的平均工资是多少？",
+      "verdict": "refused",
+      "finalStatus": "unanswerable",
+      "attempts": 1,
+      "llmCalls": 1,
+      "rows": null,
+      "lastSql": null,
+      "error": null
+    },
+    {
+      "id": "E4",
+      "layer": "不可答",
+      "question": "我们的利润率怎么样？",
+      "verdict": "refused",
+      "finalStatus": "ambiguous",
+      "attempts": 0,
+      "llmCalls": 0,
+      "rows": null,
+      "lastSql": null,
+      "error": null
+    },
+    {
+      "id": "F2",
+      "layer": "分组TopN",
+      "question": "哪 3 个下单渠道的已完成订单最多？",
+      "verdict": "verified",
+      "finalStatus": "ok",
+      "attempts": 1,
+      "llmCalls": 2,
+      "rows": {
+        "columns": [
+          "channel",
+          "completed_orders"
+        ],
+        "rows": [
+          [
+            "未知",
+            2088
+          ],
+          [
+            "APP",
+            2033
+          ],
+          [
+            "小程序",
+            2025
+          ]
+        ]
+      },
+      "lastSql": "SELECT COALESCE(channel, '未知') AS channel, COUNT(*) AS completed_orders FROM orders WHERE status = '已完成' GROUP BY COALESCE(channel, '未知') ORDER BY completed_orders DESC LIMIT 3",
+      "error": null
+    },
+    {
+      "id": "F5",
+      "layer": "分组TopN",
+      "question": "金额最大的 5 笔已完成订单各花了多少钱？",
+      "verdict": "verified",
+      "finalStatus": "ok",
+      "attempts": 1,
+      "llmCalls": 2,
+      "rows": {
+        "columns": [
+          "order_id",
+          "total_amount"
+        ],
+        "rows": [
+          [
+            5276,
+            32479.34
+          ],
+          [
+            8001,
+            32073.989999999998
+          ],
+          [
+            9312,
+            30394.9
+          ],
+          [
+            3897,
+            29539.41
+          ],
+          [
+            1359,
+            27822.86
+          ]
+        ]
+      },
+      "lastSql": "SELECT o.id AS order_id, SUM(oi.amount) AS total_amount FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.status = '已完成' GROUP BY o.id ORDER BY total_amount DESC LIMIT 5",
+      "error": null
+    }
+  ]
+}

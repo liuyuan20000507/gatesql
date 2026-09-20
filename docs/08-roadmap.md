@@ -84,7 +84,7 @@ pnpm add -D vitest @vitest/ui tsx
 git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依赖"
 ```
 
-- [ ] **完成标准**：`.gitattributes` 含 `* text=auto eol=lf`；`.env.local` 已被 gitignore；`git log` 有这条提交
+- [x] **完成标准**：`.gitattributes` 含 `* text=auto eol=lf`；`.env.local` 已被 gitignore；`git log` 有这条提交（`.gitattributes` 拖到 9/19 才补——它缺席正是每次 commit 刷 CRLF 警告、Docker 构建行尾统计异常的根源；`.env.local` gitignore 与首次提交早已达成）
 
 ---
 
@@ -178,9 +178,9 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 
 **结束时能演示**：完整的 GateSQL 产品形态，招牌演示一次性录完。
 
-- [x] 三态输出（5A/5B：徽章第 2 周已有；5A 补口径歧义拒答 + 澄清选项；5B 前端 VerdictPanel —— 未核验显示原因、拒答给澄清选项/可查清单，聊天页点击回填、回放页静态展示，实测「利润率」题秒回三选项；拒答率 0% ≤12%）
+- [x] 三态输出（5A/5B：徽章第 2 周已有；5A 补口径歧义拒答 + 澄清选项；5B 前端 VerdictPanel —— 未核验显示原因、拒答给澄清选项/可查清单，聊天页点击回填、回放页静态展示，实测「利润率」题秒回三选项；拒答率 0% ≤12%。**9/19 增强：多轮澄清**——词典扩至 5 词条（客单价/排名指标/退货率，按「多算法结果不同+无默认口径+误触发可控」三道门筛选），全部 12 选项配 clarifyPhrase（必含 disambiguator），点选项 = 原问题+话术自动重问，手不碰键盘；loop 零改动（第二轮放行全靠既有 disambiguator 机制）；防循环测试遍历全部词条×选项）
   - **完成标准**：每个答案带「已核验 / 未核验 / 拒答」标签；未核验显示具体原因；拒答显示澄清选项或可查清单；评测报告拒答率 ≤12%
-- [x] 口径回执卡片（5C：receipt.ts 从执行 SQL 的 AST 识别 status='已完成' 谓词 → 对 shop.db 实际 COUNT 排除订单；有统计范围时计数收窄到范围内。实测 D1 卡片显示「已排除已取消 1873 单、已退款 2017 单」与锚点一致；receipt 单元测 8 例含「解析失败/无库路径绝不猜数」；replay 全量 30/30 无回归 —— 回执不依赖 cassette，模型不在场时卡片数字照出）
+- [x] 口径回执卡片（5C：receipt.ts 从执行 SQL 的 AST 识别 status='已完成' 谓词 → 对 shop.db 实际 COUNT 排除订单；有统计范围时计数收窄到范围内。实测 D1 卡片显示「已排除已取消 1873 单、已退款 2017 单」与锚点一致；receipt 单元测 8 例含「解析失败/无库路径绝不猜数」；replay 全量 30/30 无回归 —— 回执不依赖 cassette，模型不在场时卡片数字照出。**9/19 增强+修复**：①fullyTranslated 语义修正——「无金额聚合=无口径义务」不再误判翻译不全（Q5 纯计数题误伤实测）；②新增三字段：计价口径（unit_price 引用亮明 R2）/排除金额合计（同范围无过滤控制总数−结果值，复用量级校验 buildControlQuery）/水位预警（范围末端越过 asOf）；均条件渲染，来源不确定整行不出现；实测 8月5日题排除金额 72,811.59 与人工验算一致）
   - **完成标准**：金额类问题上卡片正确显示「已排除已取消 1873 单、已退款 2017 单」这类由 AST + 实际 COUNT 得出的数字；**把模型从调用链里 mock 掉，卡片内容不变**
 - [x] AS_OF_DATE 时钟（第 2 周实现，B 层 5/5 实证：问「近 30 天」回显 `2026-08-02 ~ 2026-08-31`，time_resolved 事件 + 状态条展示在位）
   - **完成标准**：问「近 30 天」时界面回显 `2026-08-02 ~ 2026-08-31`，而不是按 2026-09-11 算
@@ -193,8 +193,9 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 - [x] SQL 人工编辑重跑 + 纠正样本回流 + 报表固化（5G：问答页「存为报表」仅固化 SQL；/reports 列表 + /reports/[id] 直接执行（guard 复检 + 只读连接 + 每次记 run/execute step，llm_call 恒 0）；runs 详情页人工改 SQL → guard 校验 + 只读重跑 → corrections（verified_by_user=1，表名自动识别）供 few-shot 检索。实测重跑 54ms/结果 41,015,358.75/trace 仅 1 个 execute 步骤；纠正样本 corr_07f3e462 入库 verified）
   - **完成标准**：点报表名重跑时 trace 里 `llm_call` 步骤数为 **0**、响应 <500ms
 - [x] 招牌演示脚本 + 第 5 周评测轮入档（5H：docs/demo-script.md 五镜头 60-90 秒脚本，待作者录制；最终评测 eval_20260916045915 = 30/30、误报率 0%、零回归）
+- [x] 步骤 8(d) 量级校验（docs/05 步骤 8 的最后一笔欠账，9/19 清偿：magnitude.ts 金额聚合结果对比「剥业务过滤、**保留时间范围**」的控制总数——时间口径是问题的一部分，连时间也剥掉会让「问某一天」必然误报 <1%；占比 >100%（逻辑不可能）或 <1%（过滤后所剩无几）→ fail 走 warnSeen 降级；只对单一 SUM 无 GROUP BY 表态，AVG/分组/NULL 一律 skip 不越界空集体检；控制查询逻辑导出为 buildControlQuery 供回执「排除金额合计」复用（单一事实源）。6 用例 + 实测「8月5日已完成销售额」占比 54% 正常通过、量级不误报）
 
-**第 5 周收官**：5A-5H 全部完成。累计曲线：76.7%（原口径）→ 93.3%（校准）→ 96.7%（输出契约）→ **100%（澄清机制）**。下一站第 6 周：Docker / 无 key 演示 / CI 门禁 / README。
+**第 5 周收官**：5A-5H 全部完成 + 步骤 8(d) 清偿 + 9/19 修复批（回执 fullyTranslated 语义、时间归一吞日、pnpm allowBuilds 占位符、.gitattributes 补账）。累计曲线：76.7%（原口径）→ 93.3%（校准）→ 96.7%（输出契约）→ **100%（澄清机制）**。下一站第 6 周：Docker（本体已过，验收待做）/ CI 门禁 / live-replay 对齐 / 成本护栏 / CSV / README。
 
 ---
 
@@ -204,13 +205,13 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 
 > **第 6 周开头就做，当天必须验证完整流程并计时。** 这一件事直接决定项目是否被看完。
 
-- [ ] Docker 单容器
+- [ ] Docker 单容器（**本体已完成**（9/19）：三阶段 Dockerfile（python seed 造库 / node+pnpm 构建 / 最小 runner）+ compose（3000 端口 / 命名卷 / healthcheck）+ standalone + /reports force-dynamic；容器内零 key 端到端三态全过（verified 41M 锚点 / refused+澄清 / unverified+空集归因）。**待办**：干净机器 clone→up 计时验收 + 踩坑记录进 README。途中踩坑 5 个：失效镜像源、syntax 指令、pnpm allowBuilds 占位符（本机 node_modules 已存在故从未暴露）、构建期预渲染炸库、PowerShell GBK 传参致问号乱码——全部进 6G README 素材）
   - **完成标准**：在执行过 `docker system prune` 的干净机器上 `git clone` 后 `docker compose up`，**5 分钟内** `localhost:3000` 可提问，步骤和耗时记进 README
 - [x] 无 key replay 模式（6B：resolveMode 抽取、/api/health、预置 10 题题签、DAILY_BUDGET_CNY 地基；配额重置后全量重录 + 补录 2027 空结果题；**无 key 端到端 10/10 通过**——含 2 个 unverified 降级、2 个 refused 带澄清选项。自愈演示改用历史 run 回放页：当前配置下模型几乎全部一稿过，现场无法稳定触发自愈，如实记录）
   - **完成标准**：不设置任何 LLM key 时自动进 cassette 回放，预置 10 个问题（含 2 个触发重试自愈、1 个被拒答）全流程可跑
 - [ ] CI 门禁
   - **完成标准**：故意把提示词改坏后 push，**PR 变红**并在评论里贴出对比表和由对转错题号
-- [ ] live / replay 对齐抽查
+- [x] live / replay 对齐抽查（6C，9/20：spot-check.ts 三步法 live/replay/compare；抽样 = 30 题每隔 3 取 1 覆盖六层；对齐判据 = verdict 一致 + 结果等价（resultsEqual），SQL 文本不要求一致。**10/10 对齐、零分歧**——8 题 live 写出不同 SQL 但结果与 cassette 全部等价，同时验证回放无串键与等价比对器；E4 两模式均 0 次 LLM 调用（歧义词典短路一致）。报告：eval/spot-check/report.md，eval-log 已入档）
   - **完成标准**：抽 10 题两种模式结果一致。不一致说明 cassette 缓存键设计有问题，**必须先修**
 - [ ] 鉴权与成本护栏
   - **完成标准**：把日预算调成 0 后再提问，系统**降级到 replay 返回结果**，而不是报 500
