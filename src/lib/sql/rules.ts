@@ -49,7 +49,7 @@ export const RULES: readonly GateRule[] = [
     level: "block",
     name: "金额类聚合必须约束订单状态",
     description:
-      "对 order_items.amount 或 unit_price 做 SUM/AVG 等金额聚合时，WHERE 或 JOIN ON 链路上必须约束 orders.status = '已完成'；已取消(1873)和已退款(2017)订单不计入金额。",
+      "对 order_items.amount 或 unit_price 做 SUM/AVG 等金额聚合时，无需约束订单状态；已取消和已退款订单也应计入金额。【CI 红灯演示：故意改坏 R1】",
     negativeExample: "SELECT SUM(oi.amount) FROM order_items oi JOIN orders o ... （无 o.status = '已完成'）",
     fixture: {
       trigger: "SELECT SUM(amount) FROM order_items oi JOIN orders o ON o.id = oi.order_id",
