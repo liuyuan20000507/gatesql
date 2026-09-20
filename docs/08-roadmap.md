@@ -209,7 +209,7 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
   - **完成标准**：在执行过 `docker system prune` 的干净机器上 `git clone` 后 `docker compose up`，**5 分钟内** `localhost:3000` 可提问，步骤和耗时记进 README
 - [x] 无 key replay 模式（6B：resolveMode 抽取、/api/health、预置 10 题题签、DAILY_BUDGET_CNY 地基；配额重置后全量重录 + 补录 2027 空结果题；**无 key 端到端 10/10 通过**——含 2 个 unverified 降级、2 个 refused 带澄清选项。自愈演示改用历史 run 回放页：当前配置下模型几乎全部一稿过，现场无法稳定触发自愈，如实记录）
   - **完成标准**：不设置任何 LLM key 时自动进 cassette 回放，预置 10 个问题（含 2 个触发重试自愈、1 个被拒答）全流程可跑
-- [ ] CI 门禁
+- [ ] CI 门禁（**实现完成+本地双向演练通过**（9/20）：eval.ts 加 --update-baseline/--ci 两旗标（强制 replay，确定性前提）；基线 eval/baseline.json 入库（29/30，B5 转置局限为 6B 已知项）；.github/workflows/ci.yml——seed 造库 → 类型检查 → 单测 → replay 评测对比基线 → 对比表自动贴 PR 评论。**红路径验证**：临时改坏 R1 文本 → 30 题 cassette 全 miss → 退出码非零 ✓。副产物：基线生成时暴露并修复了词典误伤 C3/D5 的真回归（759667b）——门禁未上线先立一功。**待办**：①GitHub 开 PR 的正式红灯演示（验收标准）②分支保护设置（网页 2 分钟：Settings → Branches → main → Require checks to pass））
   - **完成标准**：故意把提示词改坏后 push，**PR 变红**并在评论里贴出对比表和由对转错题号
 - [x] live / replay 对齐抽查（6C，9/20：spot-check.ts 三步法 live/replay/compare；抽样 = 30 题每隔 3 取 1 覆盖六层；对齐判据 = verdict 一致 + 结果等价（resultsEqual），SQL 文本不要求一致。**10/10 对齐、零分歧**——8 题 live 写出不同 SQL 但结果与 cassette 全部等价，同时验证回放无串键与等价比对器；E4 两模式均 0 次 LLM 调用（歧义词典短路一致）。报告：eval/spot-check/report.md，eval-log 已入档）
   - **完成标准**：抽 10 题两种模式结果一致。不一致说明 cassette 缓存键设计有问题，**必须先修**
