@@ -37,8 +37,11 @@ jobs:
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
-      - name: 类型检查
-        run: pnpm exec tsc --noEmit
+      - name: 生产构建（含类型检查）
+        # 不能在这之前跑独立 tsc：LayoutProps/PageProps 等全局类型由 build 生成
+        # 在 .next/types/ 与 next-env.d.ts（均 gitignore），CI 全新检出没有这些
+        # 生成物，纯 tsc 必挂（run #2 实测）；且 next build 本身就做类型检查，一步双用
+        run: pnpm build
 
       - name: 单元测试
         run: pnpm test
