@@ -10,7 +10,10 @@ RUN python scripts/seed_db.py && test -f data/shop.db
 FROM node:24-slim AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN corepack enable && corepack prepare pnpm@12.3.4 --activate
+# 国内网络构建传 --build-arg NPM_REGISTRY=https://registry.npmmirror.com 加速
+# （实测：容器内 npm 直连不走宿主代理，冷启动 install 可达十几分钟；默认保持官方源）
+ARG NPM_REGISTRY=https://registry.npmjs.org
+RUN corepack enable && corepack prepare pnpm@12.3.4 --activate && pnpm config set registry ${NPM_REGISTRY}
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .

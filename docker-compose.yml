@@ -1,6 +1,11 @@
 services:
   gatesql:
-    build: .
+    build:
+      context: .
+      args:
+        # 国内网络可传环境变量加速依赖下载（默认官方源，海外/CI 不受影响）：
+        #   NPM_REGISTRY=https://registry.npmmirror.com docker compose up --build
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
     image: gatesql:latest
     ports:
       - "3000:3000"
