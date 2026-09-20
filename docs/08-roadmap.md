@@ -205,7 +205,7 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 
 > **第 6 周开头就做，当天必须验证完整流程并计时。** 这一件事直接决定项目是否被看完。
 
-- [ ] Docker 单容器（**本体已完成**（9/19）：三阶段 Dockerfile（python seed 造库 / node+pnpm 构建 / 最小 runner）+ compose（3000 端口 / 命名卷 / healthcheck）+ standalone + /reports force-dynamic；容器内零 key 端到端三态全过（verified 41M 锚点 / refused+澄清 / unverified+空集归因）。**待办**：干净机器 clone→up 计时验收 + 踩坑记录进 README。途中踩坑 5 个：失效镜像源、syntax 指令、pnpm allowBuilds 占位符（本机 node_modules 已存在故从未暴露）、构建期预渲染炸库、PowerShell GBK 传参致问号乱码——全部进 6G README 素材）
+- [x] Docker 单容器（9/19-9/20 完成。三阶段 Dockerfile（python seed 造库 / node+pnpm 构建 / 最小 runner）+ compose（3000 端口 / 命名卷 / healthcheck）+ standalone + /reports force-dynamic；容器内零 key 端到端三态全过（verified 41M 锚点 / refused+澄清 / unverified+空集归因）。**冷启动计时实测**（完全零缓存、新 clone）：npm 官方源 1070s → 加 NPM_REGISTRY=npmmirror 开关（cb9b667）后 **577s，↓46%** → 有构建缓存的第二次起 **281s ≤5min 达标**。结论：「5 分钟」在国内首次冷启动不达标、预热达标，瓶颈是网络带宽（拉基础镜像+npm 下载）而非工程；README 部署章节放三档实测表+加速开关用法，不写无条件的漂亮数字。踩坑 7 条进 6G 素材：失效镜像源×3、syntax 指令、allowBuilds 占位符（本机 node_modules 掩盖）、构建期预渲染炸库、PowerShell GBK 传参、CI 缺生成类型（fresh clone tsc 必挂）、**容器网络不走宿主代理**）
   - **完成标准**：在执行过 `docker system prune` 的干净机器上 `git clone` 后 `docker compose up`，**5 分钟内** `localhost:3000` 可提问，步骤和耗时记进 README
 - [x] 无 key replay 模式（6B：resolveMode 抽取、/api/health、预置 10 题题签、DAILY_BUDGET_CNY 地基；配额重置后全量重录 + 补录 2027 空结果题；**无 key 端到端 10/10 通过**——含 2 个 unverified 降级、2 个 refused 带澄清选项。自愈演示改用历史 run 回放页：当前配置下模型几乎全部一稿过，现场无法稳定触发自愈，如实记录）
   - **完成标准**：不设置任何 LLM key 时自动进 cassette 回放，预置 10 个问题（含 2 个触发重试自愈、1 个被拒答）全流程可跑
