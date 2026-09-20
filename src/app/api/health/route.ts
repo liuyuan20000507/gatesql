@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 
-import { resolveMode } from "@/lib/agent/llm";
+import { applyBudget, resolveMode } from "@/lib/agent/llm";
 import { getTodayCostCny, openAppDb } from "@/lib/db/app";
 import { getConfig } from "@/lib/env";
 
@@ -25,10 +25,12 @@ export function GET() {
   }
 
   let dailyBudgetRemaining = -1; // -1 = 不限
+  let spentToday = 0;
   if (env.DAILY_BUDGET_CNY >= 0) {
     const appDb = openAppDb(env.APP_DB_PATH);
     try {
-      dailyBudgetRemaining = Math.max(0, env.DAILY_BUDGET_CNY - getTodayCostCny(appDb));
+      spentToday = getTodayCostCny(appDb);
+      dailyBudgetRemaining = Math.max(0, env.DAILY_BUDGET_CNY - spentToday);
     } finally {
       appDb.close();
     }
@@ -37,7 +39,8 @@ export function GET() {
   return Response.json({
     status: dbConnected ? "ok" : "degraded",
     dbConnected,
-    llmMode: resolveMode(env),
+    // llmMode 与 callLlm 同一判定：预算耗尽时如实显示 replay（护栏已降级）
+    llmMode: applyBudget(resolveMode(env), spentToday, env.DAILY_BUDGET_CNY),
     dailyBudgetRemaining,
   });
 }

@@ -18,6 +18,7 @@ import path from "node:path";
 
 import OpenAI from "openai";
 
+import { getTodayCostCny, openAppDb } from "@/lib/db/app";
 import { getConfig } from "@/lib/env";
 import { ChatCompletionsAdapter, ResponsesAdapter, pickWire, type LlmWire } from "@/lib/agent/providers";
 
@@ -70,12 +71,37 @@ export function resolveMode(env: { LLM_MODE?: "live" | "record" | "replay"; LLM_
   return env.LLM_MODE ?? (env.LLM_API_KEY ? "live" : "replay");
 }
 
+/**
+ * 预算护栏（docs/08 6F）：日预算 >= 0 且今日已花 >= 预算 → live/record 强制降级 replay。
+ * 降级强于显式 LLM_MODE——「把预算调成 0 再提问」必须触发，否则护栏形同虚设；
+ * budget = -1 表示不限。spentToday 恒 0（计价 P2 未实现）的今天，budget=0 即触发，
+ * 这正是验收路径；计价落地后同一函数自动覆盖「部分超支」场景。
+ */
+export function applyBudget(
+  mode: "live" | "record" | "replay",
+  spentToday: number,
+  budgetCny: number,
+): "live" | "record" | "replay" {
+  if (mode !== "replay" && budgetCny >= 0 && spentToday >= budgetCny) return "replay";
+  return mode;
+}
+
 export async function callLlm(
   messages: LlmMessage[],
   opts: { jsonSchema?: unknown } = {},
 ): Promise<LlmResult> {
   const env = getConfig();
-  const mode = resolveMode(env);
+  let mode = resolveMode(env);
+  // 预算护栏：今日花费触及日预算 → 强制降级 replay（docs/08 6F）。
+  // 今日花费需查 app.db（openAppDb 自动建库建表；开销毫秒级，SQLite 本地读写）
+  if (mode !== "replay" && env.DAILY_BUDGET_CNY >= 0) {
+    const db = openAppDb(env.APP_DB_PATH);
+    try {
+      mode = applyBudget(mode, getTodayCostCny(db), env.DAILY_BUDGET_CNY);
+    } finally {
+      db.close();
+    }
+  }
   const wire = pickWire(env.LLM_BASE_URL, env.LLM_WIRE);
   const key = cassetteKey(wire, env.LLM_MODEL, messages, opts.jsonSchema);
 

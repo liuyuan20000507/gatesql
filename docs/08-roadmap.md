@@ -213,7 +213,7 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
   - **完成标准**：故意把提示词改坏后 push，**PR 变红**并在评论里贴出对比表和由对转错题号
 - [x] live / replay 对齐抽查（6C，9/20：spot-check.ts 三步法 live/replay/compare；抽样 = 30 题每隔 3 取 1 覆盖六层；对齐判据 = verdict 一致 + 结果等价（resultsEqual），SQL 文本不要求一致。**10/10 对齐、零分歧**——8 题 live 写出不同 SQL 但结果与 cassette 全部等价，同时验证回放无串键与等价比对器；E4 两模式均 0 次 LLM 调用（歧义词典短路一致）。报告：eval/spot-check/report.md，eval-log 已入档）
   - **完成标准**：抽 10 题两种模式结果一致。不一致说明 cassette 缓存键设计有问题，**必须先修**
-- [ ] 鉴权与成本护栏
+- [x] 鉴权与成本护栏（6F，9/20：**实现+验收**——6B 只铺了地基（配置/查询/health 展示），降级逻辑缺失，预算 0 后系统照常 live。补 applyBudget 纯函数（预算 >= 0 且今日已花 >= 预算 → live/record 强制降级 replay，**降级强于显式 LLM_MODE**；-1 不限）+ callLlm 集成 + health 的 llmMode 如实反映降级。端到端验收：假 key + 预算 0 + 提问 → 降级 replay 命中 cassette → verified 41,015,358.75，无 error 非 500。注：今日花费恒 0（计价 P2 未实现），budget=0 即验收路径；计价落地后同函数自动覆盖「部分超支」场景。5 单测；171 全绿）
   - **完成标准**：把日预算调成 0 后再提问，系统**降级到 replay 返回结果**，而不是报 500
 - [ ] CSV 导出带 UTF-8 BOM
   - **完成标准**：在本机（GBK 代码页）用 Excel 打开中文不乱码
