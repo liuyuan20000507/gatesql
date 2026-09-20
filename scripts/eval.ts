@@ -17,7 +17,8 @@
  */
 
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 import { runAgent, type RunSummary } from "@/lib/agent/loop";
 import { createEvalRun, getEvalItemResults, getLatestEvalRun, openAppDb, recordEvalItem } from "@/lib/db/app";
@@ -142,6 +143,14 @@ async function runQuestion(question: string, asOfDate: string): Promise<Question
 
 async function main() {
   loadDotEnvLocal();
+
+  /* ---------------- 6D CI 门禁旗标 ---------------- */
+
+  const ciArg = process.argv.includes("--ci");
+  const updateBaselineArg = process.argv.includes("--update-baseline");
+  // 门禁与基线只认 replay（确定性是「红灯=真回归」等式的前提），且不依赖本地 .env
+  if ((ciArg || updateBaselineArg) && !process.env.LLM_MODE) process.env.LLM_MODE = "replay";
+
   // 必须在 getConfig() 之前设置 —— env 解析结果会被缓存，顺序错了
   // 「模式 record」就只是打印出来的假象，实际走 live 且不录 cassette（实测踩过）
   if (!process.env.LLM_MODE) process.env.LLM_MODE = "record";
@@ -149,6 +158,8 @@ async function main() {
 
   const limitArg = process.argv.indexOf("--limit");
   const limit = limitArg > -1 ? Number(process.argv[limitArg + 1]) : undefined;
+
+  const BASELINE_PATH = path.join("eval", "baseline.json");
 
   const gold = loadGold();
   const goldSnapshot = loadGoldSnapshot();
@@ -362,6 +373,84 @@ async function main() {
     console.log(`\n已落库: ${evalRunId}（eval_runs / eval_items）`);
   } finally {
     appDb.close();
+  }
+
+  /* ---------------- 6D 基线更新 / CI 门禁对比 ---------------- */
+
+  const perQuestion = Object.fromEntries(outcomes.map((o) => [o.item.id, o.pass]));
+
+  if (updateBaselineArg) {
+    if (mode !== "replay") {
+      console.error("基线只允许在 replay 模式下更新（确定性前提）。当前模式: " + mode);
+      process.exit(1);
+    }
+    const baseline = {
+      generatedAt: new Date().toISOString(),
+      model: env.LLM_MODEL,
+      mode,
+      accuracy,
+      passed,
+      total,
+      perQuestion,
+    };
+    mkdirSync(path.dirname(BASELINE_PATH), { recursive: true });
+    writeFileSync(BASELINE_PATH, JSON.stringify(baseline, null, 2), "utf-8");
+    console.log(`\n基线已更新: ${BASELINE_PATH}（${passed}/${total} = ${(accuracy * 100).toFixed(1)}%）—— 记得提交`);
+  }
+
+  if (ciArg) {
+    if (!existsSync(BASELINE_PATH)) {
+      console.error(`\n基线文件缺失: ${BASELINE_PATH} —— 门禁无法对比。本地运行 eval --update-baseline 生成并提交。`);
+      process.exit(1);
+    }
+    const baseline = JSON.parse(readFileSync(BASELINE_PATH, "utf-8")) as {
+      accuracy: number;
+      perQuestion: Record<string, boolean>;
+    };
+    const regressions = outcomes
+      .filter((o) => baseline.perQuestion[o.item.id] === true && !o.pass)
+      .map((o) => o.item.id);
+    const improvements = outcomes
+      .filter((o) => baseline.perQuestion[o.item.id] === false && o.pass)
+      .map((o) => o.item.id);
+    const accuracyDropped = accuracy < baseline.accuracy;
+
+    const rows = outcomes.map((o) => {
+      const before = baseline.perQuestion[o.item.id];
+      const change =
+        before === undefined ? "新题" : before === o.pass ? "—" : before ? "由对转错 ❌" : "由错转对 ✅";
+      return `| ${o.item.id} | ${o.item.layer} | ${before === undefined ? "-" : before ? "对" : "错"} | ${
+        o.pass ? "对" : "错"
+      } | ${change} |`;
+    });
+    const report = [
+      `## 评测对比（CI 门禁 · replay）`,
+      ``,
+      `- 准确率: 基线 ${(baseline.accuracy * 100).toFixed(1)}% → 本轮 ${(accuracy * 100).toFixed(1)}%`,
+      `- 由对转错: ${regressions.length > 0 ? regressions.join(", ") : "无"}`,
+      `- 由错转对: ${improvements.length > 0 ? improvements.join(", ") : "无"}`,
+      ``,
+      `| 题号 | 层 | 基线 | 本轮 | 变化 |`,
+      `|---|---|---|---|---|`,
+      ...rows,
+      ``,
+      `_错题详情见工作日志；模型 = ${env.LLM_MODEL}，模式 = ${mode}_`,
+    ].join("\n");
+    mkdirSync(path.dirname("eval/ci-report.md"), { recursive: true });
+    writeFileSync("eval/ci-report.md", report, "utf-8");
+
+    if (regressions.length > 0 || accuracyDropped) {
+      console.error(
+        `\nCI 门禁: 红 ✗ —— 由对转错 ${regressions.length} 题` +
+          (regressions.length > 0 ? `（${regressions.join(", ")}）` : "") +
+          `，准确率 ${(baseline.accuracy * 100).toFixed(1)}% → ${(accuracy * 100).toFixed(1)}%`,
+      );
+      process.exit(1);
+    }
+    console.log(
+      `\nCI 门禁: 绿 ✓ —— 无回归` +
+        (accuracy > baseline.accuracy ? "（准确率提升——记得 --update-baseline 更新基线）" : ""),
+    );
   }
 }
 

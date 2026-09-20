@@ -1,0 +1,66 @@
+name: CI
+
+# 6D 成本门禁（docs/08 第 6 周）：PR / push main 自动跑
+# 「replay 评测 + 基线对比」——回归则红灯，配分支保护后红 = 禁止合并。
+# 全程零密钥零花费：模型侧答案全部来自仓库内的 cassette（6B），
+# 且 6C 已实证 replay ≈ live（10/10 结果等价）。
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 生成示例数据库（固定种子 42，与录制 cassette 时逐字节一致）
+        run: python scripts/seed_db.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: 启用 pnpm（版本钉死 packageManager）
+        run: corepack enable && corepack prepare pnpm@12.3.4 --activate
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 类型检查
+        run: pnpm exec tsc --noEmit
+
+      - name: 单元测试
+        run: pnpm test
+
+      - name: replay 评测 + 基线对比（门禁本体，回归则退出码 1）
+        run: pnpm exec tsx scripts/eval.ts --ci
+
+      # 评测对比表贴到 PR 评论；always() 保证门禁失败时评论仍然发出（红灯也要说清原因）
+      - name: 评测对比表贴到 PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('eval/ci-report.md')) {
+              core.warning('eval/ci-report.md 不存在，跳过评论');
+              return;
+            }
+            const body = fs.readFileSync('eval/ci-report.md', 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
