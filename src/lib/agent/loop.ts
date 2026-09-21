@@ -27,6 +27,7 @@ import { resolveDefaultAsOf } from "@/lib/db/schema";
 import { getConfig } from "@/lib/env";
 import type { GateSqlEvent, ChartSpec } from "@/lib/events";
 import { explainCost } from "@/lib/sql/explain";
+import { semanticFingerprint } from "@/lib/sql/fingerprint";
 import { checkColumnReferences, listTableColumns } from "@/lib/sql/schema-check";
 import { checkMagnitude } from "@/lib/sql/magnitude";
 import { buildEmptyResultProbes } from "@/lib/sql/probe";
@@ -107,11 +108,11 @@ function newRunId(): string {
 }
 
 /**
- * SQL 指纹：做语义等价的轻量归一 —— 大小写折叠 + 空白归一。
- * 完整语义等价（交换可交换谓词）属 P2 优化；本版先防住「原样重试」。
+ * SQL 指纹：委托 semanticFingerprint 做语义归一（条件换序 / 别名互换也撞指纹）。
+ * 解析失败时该模块内部退回文本归一，行为向后兼容（见 fingerprint.ts 的两条安全等价）。
  */
 function fingerprint(sql: string): string {
-  return sql.replace(/\s+/g, " ").trim().toLowerCase();
+  return semanticFingerprint(sql);
 }
 
 /** 从问题里提取 hint（R6/R7 需要它，见 lint.ts 的契约） */
