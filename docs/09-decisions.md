@@ -218,11 +218,15 @@
 
 ---
 
-## 待补充
+## 待补充 → 已完成
 
-第 7-8 周补齐的单篇 ADR：
+以上 4 条已展开为独立 ADR（9/21，短格式）：
 
-- 为什么不做自由多轮追问（评测从无状态变有状态）
-- 为什么环路检测用 AST 指纹而不是文本比较，做到什么程度算够
-- 为什么口径回执只翻译规则表枚举到的谓词形态
-- 为什么 trace 表结构必须第 2 周定死
+- [015 不做自由多轮追问](adr/015-no-free-multi-turn.md)
+- [016 AST 指纹语义归一边界](adr/016-ast-fingerprint-boundary.md)
+- [017 回执只翻译枚举形态](adr/017-receipt-translation-scope.md)
+- [018 trace 表结构冻结](adr/018-trace-schema-frozen.md)
+
+本周新增决策也已入 adr/：[019 replay CI 门禁](adr/019-replay-ci-gate.md)、[020 确定性澄清词典](adr/020-deterministic-clarify-lexicon.md)、[021 水位外提前拒答](adr/021-early-refuse-beyond-watermark.md)、[022 列名核对零误报纪律](adr/022-column-check-zero-false-positive.md)、[023 预算耗尽降级 replay](adr/023-budget-degrade-replay.md)。全部索引见 [adr/README.md](adr/README.md)。
+
+> **注意**：adr/ 里的各篇是**结构化底稿**（短格式，关键问题+代价）。面试前作者应逐篇用自己的话内化——「作者本人写」的本意是「作者本人能讲透」，背熟底稿不等于讲透。
