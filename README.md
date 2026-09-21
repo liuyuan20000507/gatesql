@@ -4,7 +4,7 @@
 
 用自然语言问数，GateSQL 生成并只读执行 SQL —— 并在数字交付给你之前，用**代码强制的口径规则**和**结果体检**拦下「SQL 跑通了、图也画了、但数字是错的」那一整类错误。
 
-https://github.com/liuyuan20000507/gatesql/assets/demo
+https://github.com/user-attachments/assets/31dfdd5f-2f5d-4f02-890e-9357e8741b13
 
 *30 秒演示：已核验数字与口径回执 → 口径歧义拒答与一键澄清 → 空结果归因（详见 [演示脚本](docs/demo-script.md)）*
 
