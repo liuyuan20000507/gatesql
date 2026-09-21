@@ -215,7 +215,7 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
   - **完成标准**：抽 10 题两种模式结果一致。不一致说明 cassette 缓存键设计有问题，**必须先修**
 - [x] 鉴权与成本护栏（6F，9/20：**实现+验收**——6B 只铺了地基（配置/查询/health 展示），降级逻辑缺失，预算 0 后系统照常 live。补 applyBudget 纯函数（预算 >= 0 且今日已花 >= 预算 → live/record 强制降级 replay，**降级强于显式 LLM_MODE**；-1 不限）+ callLlm 集成 + health 的 llmMode 如实反映降级。端到端验收：假 key + 预算 0 + 提问 → 降级 replay 命中 cassette → verified 41,015,358.75，无 error 非 500。注：今日花费恒 0（计价 P2 未实现），budget=0 即验收路径；计价落地后同函数自动覆盖「部分超支」场景。5 单测；171 全绿）
   - **完成标准**：把日预算调成 0 后再提问，系统**降级到 replay 返回结果**，而不是报 500
-- [ ] CSV 导出带 UTF-8 BOM
+- [x] CSV 导出带 UTF-8 BOM（6E，9/21：/api/export/[runId] 从 app.db 读 run 结果生成 CSV；csv.ts 三层——BOM 前缀（文件头 EF BB BF 断言）/RFC 4180 转义/CSV 注入防护（=/+/@ 开头非数字加 ' 前缀，纯数字保持数值）；操作栏「导出 CSV」按钮。8 用例；实测 GBK 机器 Excel 双击打开中文不乱码（用户验收））
   - **完成标准**：在本机（GBK 代码页）用 Excel 打开中文不乱码
 - [ ] README
   - **完成标准**：顶部 30 秒演示 GIF、架构图、评测结果 markdown 表格、≥8 条踩坑记录（**必须包含**：prepare 静默丢弃多语句、worker.terminate 无法回收卡死线程、React StrictMode 导致 SSE 双连接付两次费）
