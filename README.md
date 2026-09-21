@@ -153,4 +153,5 @@ pnpm dev
 | [技术决策记录](docs/09-decisions.md) | 每个选择的理由与代价 |
 | [工程规范](docs/10-engineering.md) | 编码规范、环境变量、环境坑 |
 | [评测日志](docs/eval-log.md) | 每轮评测的数字与错题归因 |
+| [Backlog](docs/backlog.md) | 明确不做的事，以及「如果要做会怎么做 + 触发条件」 |
 | [演示脚本](docs/demo-script.md) | 招牌演示五镜头 |
