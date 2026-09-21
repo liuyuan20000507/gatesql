@@ -106,6 +106,7 @@ export type StepKind =
   | "sql_attempt"
   | "guard"
   | "lint"
+  | "column_check"
   | "eqp"
   | "execute"
   | "verify"

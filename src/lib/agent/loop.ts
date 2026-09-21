@@ -27,6 +27,7 @@ import { resolveDefaultAsOf } from "@/lib/db/schema";
 import { getConfig } from "@/lib/env";
 import type { GateSqlEvent, ChartSpec } from "@/lib/events";
 import { explainCost } from "@/lib/sql/explain";
+import { checkColumnReferences, listTableColumns } from "@/lib/sql/schema-check";
 import { checkMagnitude } from "@/lib/sql/magnitude";
 import { buildEmptyResultProbes } from "@/lib/sql/probe";
 import { QueryTimeoutError, SqlExecutor } from "@/lib/sql/executor";
@@ -235,6 +236,14 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
     }
     deps.emit({ type: "context_built", tables: ctx.selectedTables, fewshotIds });
     const hints = extractHints(question);
+    // 列名核对的真实表列清单（每 run 读一次）。读不到 = 空 Map = 核对整体静默跳过
+    // （fail-open：新增检查层绝不能成为新的崩溃源）
+    let schemaColumns: Map<string, Set<string>>;
+    try {
+      schemaColumns = listTableColumns(env.SHOP_DB_PATH);
+    } catch {
+      schemaColumns = new Map();
+    }
 
     // 重试上下文只追加不重写：携带全部历史失败的结构化摘要
     const repairHistory: Array<{ attempt: number; kind: string; detail: string }> = [];
@@ -414,6 +423,29 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         // 预算耗尽仍未修复口径 —— 拒答（三态之一），绝不在错误口径下出数字
         verdict = "refused";
         verdictReasons.push(`口径规则未能在预算内修复：${blame}`);
+        break;
+      }
+
+      // —— 步骤 5.5：列名静态核对（6G②，零误报纪律：只核对带真实表前缀的引用）——
+      // 带前缀的错列在执行前就拦下，诊断精确到「该表可用列」；无前缀/CTE 一律放行，
+      // 数据库报错路径（SQL_FAILED + execRetries）保持原样兜底
+      const colCheck = checkColumnReferences(guard.sql, schemaColumns);
+      trace({
+        kind: "column_check",
+        seq: attempt,
+        startedAt: t0,
+        endedAt: Date.now(),
+        status: colCheck.ok ? "ok" : "failed",
+        attributes: colCheck.ok ? {} : { detail: colCheck.detail },
+      });
+      if (!colCheck.ok) {
+        if (budgets.repairs > 0) {
+          budgets.repairs--;
+          repairHistory.push({ attempt, kind: "COLUMN_UNKNOWN", detail: colCheck.detail ?? "列引用不存在" });
+          continue;
+        }
+        verdict = "refused";
+        verdictReasons.push(`列名核对未能在预算内通过：${colCheck.detail ?? ""}`);
         break;
       }
 

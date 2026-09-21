@@ -229,6 +229,7 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
 进度正常则做：
 
 - [x] 步骤 2.6 时间窗口提前拒答（9/21：isBeyondWatermark 纯函数 + loop 挂载；问未来时段从「1 次 LLM + 空集归因」升级为「0 次调用 + 精确理由」；E5/2027 实测 llmCalls=0，部分重叠窗口（B4）不受影响照常 verified；评测 --ci 无回归。发现并修复循环条件缺陷：`while (!ambiguity)` 未检查 verdict，2.6 命中仍进循环——改为 `while (!ambiguity && verdict === null)`）
+- [x] 步骤 5.5 列名静态核对（9/21：schema-check.ts——带真实表前缀的列引用对照 PRAGMA 实际列清单，错列在执行前拦下并回喂「该表可用列」清单，比数据库报错更精确；**零误报纪律**：无前缀列/CTE 别名/表达式结果一律跳过，解析失败 fail-open，读不到 schema 整体静默；耗 repairs 预算同 EQP；trace 新增 column_check step。8 单测；评测 --ci 30 题 cassette 全过零误伤）
 - [ ] `docs/adr/` 下每个关键决策一篇**作者本人写**的 ADR，每篇必须有「代价」一节
 - [ ] 面试叙述稿，口头演练 [Agent 设计](05-agent-design.md#七面试官很可能会问的五个问题) 的五个必问题
 - [ ] 再跑一轮定向优化；若已无提升空间，写一段「剩余错题分布在哪四类、每类为什么难、下一步会怎么做」
