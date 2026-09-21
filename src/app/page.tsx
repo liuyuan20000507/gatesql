@@ -158,6 +158,7 @@ export default function Home() {
             <RunActionBar
               runId={state.runId}
               enabled={state.verdict === "verified"}
+              canExport={state.result !== null}
             />
           )}
 
