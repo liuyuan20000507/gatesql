@@ -217,7 +217,7 @@ git add -A; git -c core.autocrlf=false commit -m "第0阶段：脚手架与依�
   - **完成标准**：把日预算调成 0 后再提问，系统**降级到 replay 返回结果**，而不是报 500
 - [x] CSV 导出带 UTF-8 BOM（6E，9/21：/api/export/[runId] 从 app.db 读 run 结果生成 CSV；csv.ts 三层——BOM 前缀（文件头 EF BB BF 断言）/RFC 4180 转义/CSV 注入防护（=/+/@ 开头非数字加 ' 前缀，纯数字保持数值）；操作栏「导出 CSV」按钮。8 用例；实测 GBK 机器 Excel 双击打开中文不乱码（用户验收））
   - **完成标准**：在本机（GBK 代码页）用 Excel 打开中文不乱码
-- [ ] README
+- [x] README（9/21 收网：顶部 1.3MB 演示视频（MP4 替代 GIF——GitHub 原生渲染、体积更小更清晰，64.4MB 原片 ffmpeg 压制）；Mermaid 架构图；评测曲线表（76.7→93.3→96.7→100 + 误报率 0% + CI replay 门禁）；**踩坑 10 条**（超 ≥8 标准，含全部 3 条硬坑 + Docker 7 条新坑）；「已实现/待实现/明确不做」三档如实分类。内容逐句有据：评测数字出自 eval-log，计时出自 6A 三档实测）
   - **完成标准**：顶部 30 秒演示 GIF、架构图、评测结果 markdown 表格、≥8 条踩坑记录（**必须包含**：prepare 静默丢弃多语句、worker.terminate 无法回收卡死线程、React StrictMode 导致 SSE 双连接付两次费）
 
 ---
