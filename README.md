@@ -150,7 +150,7 @@ pnpm dev
 | [评测体系](docs/06-evaluation.md) | 测试集、打分、指标、CI 门禁 |
 | [安全设计](docs/07-security.md) | 九层防护 + 攻击清单 |
 | [开发路线图](docs/08-roadmap.md) | 分周任务和完成标准 |
-| [技术决策记录](docs/09-decisions.md) | 每个选择的理由与代价（[单篇 ADR 索引](docs/adr/README.md)，23 篇） |
+| [技术决策记录](docs/09-decisions.md) | 23 篇 ADR：每个选择的理由、关键问题与代价 |
 | [工程规范](docs/10-engineering.md) | 编码规范、环境变量、环境坑 |
 | [评测日志](docs/eval-log.md) | 每轮评测的数字与错题归因 |
 | [Backlog](docs/backlog.md) | 明确不做的事，以及「如果要做会怎么做 + 触发条件」 |
