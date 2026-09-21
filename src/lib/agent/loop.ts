@@ -17,6 +17,14 @@
 import { createHash } from "node:crypto";
 
 import { callLlm } from "@/lib/agent/llm";
+import {
+  buildChartPrompts,
+  buildSelfCheckPrompts,
+  buildSqlGenSystemPrompt,
+  buildSqlGenUserParts,
+  type RepairRecord,
+} from "@/lib/agent/prompt";
+import { runHealthChecks } from "@/lib/agent/health";
 import { findAmbiguity, formatClarifyReason } from "@/lib/agent/clarify";
 import { formatFewshotExamples, retrieveFewshots } from "@/lib/agent/fewshot";
 import { buildSchemaContext } from "@/lib/agent/schema-context";
@@ -29,13 +37,10 @@ import type { GateSqlEvent, ChartSpec } from "@/lib/events";
 import { explainCost } from "@/lib/sql/explain";
 import { semanticFingerprint } from "@/lib/sql/fingerprint";
 import { checkColumnReferences, listTableColumns } from "@/lib/sql/schema-check";
-import { checkMagnitude } from "@/lib/sql/magnitude";
-import { buildEmptyResultProbes } from "@/lib/sql/probe";
 import { QueryTimeoutError, SqlExecutor } from "@/lib/sql/executor";
 import { guardSql } from "@/lib/sql/guard";
 import { buildReceipt } from "@/lib/sql/receipt";
 import { lintRules, type LintHints } from "@/lib/sql/lint";
-import { rulesPromptText } from "@/lib/sql/rules";
 
 /* ------------------------------------------------------------------ */
 /* 输入 / 输出                                                         */
@@ -247,7 +252,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
     }
 
     // 重试上下文只追加不重写：携带全部历史失败的结构化摘要
-    const repairHistory: Array<{ attempt: number; kind: string; detail: string }> = [];
+    const repairHistory: RepairRecord[] = [];
 
     /* ============ 步骤 3~7：生成 → 检查 → 执行（唯一的重试循环） ============ */
     // 口径歧义/水位外时间窗命中时循环体一次都不进（0 次模型调用，直达拒答）
@@ -265,46 +270,10 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       const attempt = ++attempts;
       const t0 = Date.now();
 
-      // —— 步骤 3：生成 SQL ——
-      const system = [
-        "你是 GateSQL 的 SQL 生成引擎。数据库是 SQLite，只有 4 张业务表。",
-        "请根据用户问题和下面的表结构，生成一条只读查询。",
-        "",
-        "严格遵守的口径规则：",
-        rulesPromptText(),
-        "",
-        "只能使用已列出的表和字段；如果数据源中确实不存在能回答问题的数据，",
-        "把 unanswerable 设为 true 并说明原因，不要编造 SQL。",
-        "",
-        "【输出契约】",
-        "1. 只输出回答用户问题所必需的列，不要附带中间计算过程列（如销售额、订单数等辅助列）；",
-        "2. 列别名用英文小写下划线风格（如 avg_order_value），不要用中文别名；",
-        "3. 分组统计结果按业务意义排序（数值列降序），不要按分组键排序。",
-        "",
-        "【输出格式·必须严格遵守】",
-        '只输出一个 JSON 对象，不要 markdown 代码围栏，不要任何解释性文字。字段：',
-        '  sql: 只读查询语句（不要带结尾分号）',
-        '  unanswerable: 布尔，数据源无法回答时为 true',
-        '  unanswerableReason: 当 unanswerable=true 时填写原因',
-        '示例：{"sql":"SELECT COUNT(*) AS n FROM customers","unanswerable":false,"unanswerableReason":""}',
-        "",
-        "表结构：",
-        ctx.card,
-        // 条件展开：few-shot 为空时数组元素与旧版完全一致 → prompt 逐字节不变 →
-        // 既有 cassette 全部命中，OFF 路径零成本零破坏
-        ...(fewshots.length > 0 ? [formatFewshotExamples(fewshots)] : []),
-      ].join("\n");
-
-      const userParts = [`问题：${question}`];
-      if (repairHistory.length > 0) {
-        userParts.push("\n你之前生成的 SQL 未通过校验，请修正重新生成。失败历史：");
-        for (const h of repairHistory) {
-          userParts.push(`- 第 ${h.attempt} 次：${h.kind} —— ${h.detail}`);
-        }
-      }
-      if (sameFingerprintHits >= 1) {
-        userParts.push("注意：你刚才的修改等价于没改（指纹相同）。请换一种根本不同的写法，例如改用子查询隔离聚合粒度。");
-      }
+      // —— 步骤 3：生成 SQL（prompt 构建抽至 prompt.ts，逐字节等价以保住 cassette 键）——
+      const fewshotText = fewshots.length > 0 ? formatFewshotExamples(fewshots) : null;
+      const system = buildSqlGenSystemPrompt(ctx.card, fewshotText);
+      const userParts = buildSqlGenUserParts(question, repairHistory, sameFingerprintHits >= 1);
 
       const gen = await callLlm(
         [
@@ -469,13 +438,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       // 架构上不多开一条「第二生成路径」。每次运行最多审计一次，预算不足时降级未核验放行。
       if (env.SELF_CHECK === "on" && !selfCheckUsed) {
         selfCheckUsed = true;
-        const scSystem = [
-          "你是 SQL 审计员。给定用户问题、表结构和一条已通过安全与口径检查的候选 SQL，",
-          "逐项核对：①是否真的回答了问题（列、聚合粒度、范围）；②金额是否只算已完成订单；",
-          "③毛利类是否用成交价 unit_price；④订单计数是否去重；⑤时间边界是否覆盖题意。",
-          "拿不准就报 revise 并指明错在哪个子句；没有疑点就报 pass，不得为了挑刺而编造问题。",
-        ].join("\n");
-        const scUser = `问题：${question}\n候选 SQL：${guard.sql}\n表结构：\n${ctx.card}`;
+        const { system: scSystem, user: scUser } = buildSelfCheckPrompts(ctx.card, question, guard.sql);
         const sc = await callLlm(
           [
             { role: "system", content: scSystem },
@@ -547,72 +510,23 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
     }
 
     /* ============ 步骤 8：结果体检（不调 LLM） ============ */
-
+    // 分析逻辑抽至 health.ts（纯函数，可单测）；状态写入与 emit 留在主函数，保持流转集中
     if (success) {
-      const checks: Array<{ kind: "empty_result" | "suspicious_shape" | "data_watermark" | "magnitude"; passed: boolean; detail: string }> = [];
-      // 聚合对空集返回「一行 NULL」而不是 0 行 —— 两种形态都算空（docs/05 步骤 8(b)）
-      const emptyAggregate = success.rows.length === 1 && success.rows[0].every((v) => v === null);
-      if (success.rows.length === 0) {
-        finalStatus = "EMPTY_RESULT";
-        checks.push({ kind: "empty_result", passed: false, detail: "查询返回 0 行" });
-      } else if (emptyAggregate) {
-        checks.push({ kind: "empty_result", passed: true, detail: "结果非空" });
-        checks.push({ kind: "suspicious_shape", passed: false, detail: "聚合结果为单个 NULL：范围内 0 行，聚合建立在空集上" });
-        warnSeen = true; // 单个 NULL 的「0」绝不能以已核验姿态交付
-        warnReasoned = true;
-        verdictReasons.push("聚合建立在空集上：本范围内没有匹配数据，数字（NULL/0）不代表业务为零");
-      } else {
-        checks.push({ kind: "empty_result", passed: true, detail: "结果非空" });
-      }
-      if (success.rows.length >= env.MAX_ROWS) {
-        checks.push({ kind: "suspicious_shape", passed: false, detail: "行数到达 LIMIT 上限，可能被静默截断" });
-      } else {
-        checks.push({ kind: "suspicious_shape", passed: true, detail: "未见截断" });
-      }
-      // 5E：空结果归因探针 —— 每次只放宽一类条件重跑 COUNT（代码生成，≤4 条），
-      // 第一个「放宽后就有数据」的条件类即元凶；全部放宽仍为 0 就如实说没有数据
-      let emptyReason: { suspectCondition: string; countIfRelaxed: number } | undefined;
-      if ((success.rows.length === 0 || emptyAggregate) && lastSql) {
-        for (const probe of buildEmptyResultProbes(lastSql)) {
-          try {
-            const r = await executor.execute(probe.sql);
-            const n = Number(r.rows[0]?.[0] ?? 0);
-            if (n > 0) {
-              emptyReason = { suspectCondition: probe.label, countIfRelaxed: n };
-              break;
-            }
-            if (probe.label === "全部过滤条件") {
-              emptyReason = { suspectCondition: probe.label, countIfRelaxed: 0 };
-            }
-          } catch {
-            // 探针自身失败：放弃归因，不编原因
-          }
-        }
-        if (emptyReason && emptyReason.countIfRelaxed > 0) {
-          verdictReasons.push(
-            `该口径下没有数据；单独放宽「${emptyReason.suspectCondition}」后可见 ${emptyReason.countIfRelaxed} 行`,
-          );
-        }
-      }
-      // 8(d)：量级校验 —— 金额聚合结果对比「去业务过滤、留时间范围」的控制总数，
-      // 占比 >100% 或 <1% 标红降级。skip（非金额/分组/空集形态）时静默，不越界空集体检。
-      if (lastSql) {
-        const mag = checkMagnitude({
-          sql: lastSql,
-          columns: success.columns,
-          rows: success.rows,
-          shopDbPath: env.SHOP_DB_PATH,
-        });
-        if (mag.status === "fail") {
-          checks.push({ kind: "magnitude", passed: false, detail: mag.detail });
-          warnSeen = true;
-        }
-      }
-      // 5D：窗口越过数据水位线 → 末点不完整标记（纯代码判定，前端画虚线+横幅）
+      const h = await runHealthChecks({
+        success,
+        lastSql,
+        maxRows: env.MAX_ROWS,
+        shopDbPath: env.SHOP_DB_PATH,
+        execute: (sql) => executor.execute(sql),
+      });
+      if (h.emptyResultFlag) finalStatus = "EMPTY_RESULT";
+      if (h.warnSeen) warnSeen = true;
+      if (h.warnReasoned) warnReasoned = true;
+      for (const r of h.reasons) verdictReasons.push(r);
       deps.emit({
         type: "verification",
-        checks,
-        emptyReason,
+        checks: h.checks,
+        emptyReason: h.emptyReason,
         incompletePeriod: detectIncompletePeriod(resolution, asOf) ?? undefined,
       });
     }
@@ -683,19 +597,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
     /* ============ 步骤 10：图表 + 结论（LLM #2，可被预算砍掉） ============ */
 
     if (success && verdict !== "refused" && llmCalls < 6) {
-      const sys =
-        "你是数据解读助手。只根据查询结果说话，不引用未见的数据。\n" +
-        "【输出格式·必须严格遵守】\n" +
-        "只输出一个 JSON 对象，不要 markdown 代码围栏，不要任何解释性文字。\n" +
-        "字段定义：\n" +
-        '  kind: "bar" | "line" | "pie" | "none"，选择最适合展示这张表的图；不适合画图就 "none"\n' +
-        '  x: 横轴列的列名字符串（若为 none 则 ""）\n' +
-        '  y: 数值列的列名字符串数组（若为 none 则 []）\n' +
-        '  title: 图表标题\n' +
-        '  summary: 一句定性结论，解释数据说明了什么（重点是趋势/对比/占比，禁止出现任何数字）。\n' +
-        '示例：{"kind":"bar","x":"category","y":["sales"],"title":"分类销售额","summary":"食品生鲜领先，服饰鞋包垫底，分类间呈阶梯分布。"}';
-      const content = `表结构：\n${ctx.card}\n\n查询结果（前 50 行）：\n${success.columns.join(", ")}\n` +
-        success.rows.slice(0, 50).map((r) => r.join("\t")).join("\n");
+      const { system: sys, user: content } = buildChartPrompts(ctx.card, success.columns, success.rows);
 
       // 总结调用失败时允许自动重试一次（对偶预算：不占 repairs / execRetries）
       for (let s = 0; s < 2 && llmCalls < 6; s++) {
