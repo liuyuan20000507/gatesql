@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveTimeRange } from "@/lib/agent/time";
+import { isBeyondWatermark, resolveTimeRange } from "@/lib/agent/time";
 
 const AS_OF = "2026-08-31";
 
@@ -41,5 +41,27 @@ describe("resolveTimeRange（步骤 1 时间归一）", () => {
     const r = resolveTimeRange("近 30 天的销售额", AS_OF);
     expect(r!.display).toBe("2026-08-02 ~ 2026-08-31");
     expect(r!.rewrittenQuestion).toContain("2026-08-02 至 2026-08-31");
+  });
+});
+
+describe("isBeyondWatermark（步骤 2.6 提前拒答判定）", () => {
+  it("窗口整体在水位后 → true（问未来时段）", () => {
+    const r = resolveTimeRange("2027 年 1 月的销售额", AS_OF)!;
+    expect(isBeyondWatermark(r, AS_OF)).toBe(true);
+  });
+
+  it("部分重叠（末端越界）→ false，交给步骤 8 水位标记", () => {
+    const r = resolveTimeRange("近 30 天的销售额", AS_OF)!; // 08-02 ~ 08-31，to == asOf
+    expect(isBeyondWatermark(r, AS_OF)).toBe(false);
+    expect(r.to).toBe(AS_OF);
+  });
+
+  it("窗口在水位内 → false", () => {
+    const r = resolveTimeRange("上个月的销售额", AS_OF)!;
+    expect(isBeyondWatermark(r, AS_OF)).toBe(false);
+  });
+
+  it("无时间表达（null）→ false", () => {
+    expect(isBeyondWatermark(null, AS_OF)).toBe(false);
   });
 });

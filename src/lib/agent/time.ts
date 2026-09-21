@@ -128,6 +128,22 @@ const RULES: Rule[] = [
 ];
 
 /**
+ * 统计窗口是否整体越过数据水位（asOf = 数据最大日期）。
+ * 命中即可在调模型之前拒答——「问了一个数据库里还不存在的时段」，
+ * 0 token、毫秒级，优于「跑完 LLM+探针后归因」（docs/08 6G 后续优化）。
+ * 只判「整体在后」：部分重叠（问近 30 天而数据止于月中）照常执行，
+ * 由步骤 8 的水位检测出「末端不完整」标记——两种情况行为不同。
+ * 注意窗口早于数据起点（to < minDate）需要另查 MIN(created_at)，本期不覆盖。
+ */
+export function isBeyondWatermark(
+  resolution: { from: string; to: string } | null,
+  asOf: string,
+): boolean {
+  // from/to 均为 YYYY-MM-DD，字典序即时间序
+  return resolution !== null && resolution.from > asOf;
+}
+
+/**
  * 解析问题中的相对时间表达。解析不出时返回 null（调用方跳过，不报错）。
  * 只替换第一个命中 —— 多时间表达（「7 月和 8 月分别…」）不在本期范围。
  */

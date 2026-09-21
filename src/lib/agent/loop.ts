@@ -20,7 +20,7 @@ import { callLlm } from "@/lib/agent/llm";
 import { findAmbiguity, formatClarifyReason } from "@/lib/agent/clarify";
 import { formatFewshotExamples, retrieveFewshots } from "@/lib/agent/fewshot";
 import { buildSchemaContext } from "@/lib/agent/schema-context";
-import { resolveTimeRange } from "@/lib/agent/time";
+import { resolveTimeRange, isBeyondWatermark } from "@/lib/agent/time";
 import { detectIncompletePeriod } from "@/lib/agent/period";
 import { createRun, finishRun, insertStep, openAppDb, type NewStepInput } from "@/lib/db/app";
 import { resolveDefaultAsOf } from "@/lib/db/schema";
@@ -223,6 +223,16 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       finalStatus = "ambiguous";
       verdictReasons.push(formatClarifyReason(ambiguity));
     }
+    // —— 步骤 2.6：时间窗口整体越过数据水位 → 提前拒答（6G 后续优化，0 次模型调用）——
+    // 问了一个数据库里还不存在的时段：跑 LLM+探针只会得到空集归因，
+    // 在源头拒答理由更准、0 token。部分重叠的窗口照常执行（步骤 8 出水位标记）
+    if (!ambiguity && isBeyondWatermark(resolution, asOf)) {
+      verdict = "refused";
+      finalStatus = "beyond_watermark";
+      verdictReasons.push(
+        `你问的时间范围（${resolution!.display}）在数据覆盖范围（截至 ${asOf}）之外，无数据可查`,
+      );
+    }
     deps.emit({ type: "context_built", tables: ctx.selectedTables, fewshotIds });
     const hints = extractHints(question);
 
@@ -230,8 +240,8 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
     const repairHistory: Array<{ attempt: number; kind: string; detail: string }> = [];
 
     /* ============ 步骤 3~7：生成 → 检查 → 执行（唯一的重试循环） ============ */
-    // 口径歧义命中时循环体一次都不进（0 次模型调用，直达拒答）
-    while (!ambiguity) {
+    // 口径歧义/水位外时间窗命中时循环体一次都不进（0 次模型调用，直达拒答）
+    while (!ambiguity && verdict === null) {
       // —— 循环守卫：墙钟 / LLM 调用数 ——
       if (Date.now() - startedAt > budgets.wallClockMs) {
         finalStatus = "BUDGET_EXCEEDED";
