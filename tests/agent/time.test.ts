@@ -4,7 +4,7 @@ import { isBeyondWatermark, resolveTimeRange } from "@/lib/agent/time";
 
 const AS_OF = "2026-08-31";
 
-describe("resolveTimeRange（步骤 1 时间归一）", () => {
+describe("resolveTimeRange（A2 时间归一）", () => {
   it("年月日 → 单日区间，改写文本收敛为单个日期（6C 实测 bug 回归）", () => {
     const r = resolveTimeRange("2026 年 8 月 5 日的已完成订单销售额", AS_OF);
     expect(r).not.toBeNull();
@@ -44,13 +44,13 @@ describe("resolveTimeRange（步骤 1 时间归一）", () => {
   });
 });
 
-describe("isBeyondWatermark（步骤 2.6 提前拒答判定）", () => {
+describe("isBeyondWatermark（A4 第二道子检查 · 提前拒答判定）", () => {
   it("窗口整体在水位后 → true（问未来时段）", () => {
     const r = resolveTimeRange("2027 年 1 月的销售额", AS_OF)!;
     expect(isBeyondWatermark(r, AS_OF)).toBe(true);
   });
 
-  it("部分重叠（末端越界）→ false，交给步骤 8 水位标记", () => {
+  it("部分重叠（末端越界）→ false，交给 C1 水位标记", () => {
     const r = resolveTimeRange("近 30 天的销售额", AS_OF)!; // 08-02 ~ 08-31，to == asOf
     expect(isBeyondWatermark(r, AS_OF)).toBe(false);
     expect(r.to).toBe(AS_OF);

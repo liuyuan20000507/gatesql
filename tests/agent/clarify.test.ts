@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { LEXICON, findAmbiguity, formatClarifyReason } from "@/lib/agent/clarify";
 
-describe("findAmbiguity（步骤 2.5 歧义词典）", () => {
+describe("findAmbiguity（A4 第一道子检查 · 歧义词典）", () => {
   it("关键词命中 → 返回词条", () => {
     expect(findAmbiguity("上个月的利润率是多少")?.id).toBe("profit_margin");
     expect(findAmbiguity("复购率怎么算")?.id).toBe("repeat_rate");

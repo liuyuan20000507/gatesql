@@ -1,9 +1,13 @@
 /**
  * SQL 安全检查（作者本人重写本文件 —— 面试必问，见自检清单）。
  *
- * 实现分层（docs/07-security.md）：
+ * 实现分层（docs/07-security.md 的**安全层号**，与 docs/05 的流程步骤号 A1~C4 是两套坐标系）：
  *   openReadOnlyConnection —— 第 1 层连接只读 + 第 2 层引擎级授权回调
  *   guardSql                —— 第 4 层语句层 AST 白名单（fail-closed）
+ *
+ * guardSql 内部用 ①~⑦ 标记它自己的检查次序（既不是流程步骤，也不是安全层）：
+ *   ① 正则预检 ② 解析并判多语句 ③ 语句类型白名单 ④ 递归扫危险节点
+ *   ⑤ 表名过滤 ⑥ LIMIT 注入/收紧 ⑦ sqlify 重建
  *
  * 本实现基于实测的 node-sql-parser v5 行为（见 scripts/_tmp_probe_ast*.cjs）：
  *   - 单条 SELECT 返回 { type:'select', ... }，多条语句返回数组
@@ -53,7 +57,7 @@ export type GuardVerdict =
  *   READ 动作上报的是 (列名, schema名)，例如 SELECT id FROM orders →
  *   [20, "id", "main"]；sqlite_master 这类内部虚拟表同样不携带表名。
  *   因此「引擎层按表名过滤内部表」在 node:sqlite 上无法实现，
- *   内部表读过滤必须由 guardSql 的语句层表名收集（第 4.5 步）承担。
+ *   内部表读过滤必须由 guardSql 的语句层表名收集（⑤）承担。
  *   这是分层防护而非缺口：引擎层按动作码挡写/结构/外挂，语句层挡内部表读。
  */
 
@@ -184,14 +188,14 @@ const MAX_ROWS = 1000;
  * 返回 ok 时，sql 为已注入/收紧 LIMIT 的最终可执行语句。
  */
 export function guardSql(rawSql: string): GuardVerdict {
-  // —— 步骤 1：正则预检（廉价前置过滤）——
+  // —— ① 正则预检（廉价前置过滤）——
   // 去掉首部注释与空白后，只接受 SELECT / WITH 开头
   const stripped = rawSql.replace(/^\s*(--[^\n]*\n|\/\*[\s\S]*?\*\/|\s)+/, "");
   if (!/^(select|with)\b/i.test(stripped)) {
     return { ok: false, reason: "NOT_SELECT_OR_WITH", detail: "只支持以 SELECT 或 WITH 开头的查询语句" };
   }
 
-  // —— 步骤 2：解析并判定多语句 ——
+  // —— ② 解析并判定多语句 ——
   let parsed: unknown;
   try {
     parsed = astifyWithSqliteDialect(new Parser(), stripped);
@@ -207,7 +211,7 @@ export function guardSql(rawSql: string): GuardVerdict {
 
   const ast = parsed as Record<string, unknown>;
 
-  // —— 步骤 3：语句类型白名单 ——
+  // —— ③ 语句类型白名单 ——
   if (ast.type !== "select") {
     return {
       ok: false,
@@ -216,13 +220,13 @@ export function guardSql(rawSql: string): GuardVerdict {
     };
   }
 
-  // —— 步骤 4：递归扫危险节点（含 with/子查询里的嵌套）——
+  // —— ④ 递归扫危险节点（含 with/子查询里的嵌套）——
   const hit = findDangerousNode(ast);
   if (hit) {
     return { ok: false, reason: "DANGEROUS_NODE", detail: `检测到危险语句片段: ${hit}` };
   }
 
-  // —— 步骤 4.5：表名过滤（系统表 / 注释表）——
+  // —— ⑤ 表名过滤（系统表 / 注释表）——
   const blockedTables = [...collectTableNames(ast)].filter(isBlockedTable);
   if (blockedTables.length > 0) {
     return {
@@ -232,7 +236,7 @@ export function guardSql(rawSql: string): GuardVerdict {
     };
   }
 
-  // —— 步骤 5：LIMIT 注入 / 收紧（防结果集打爆内存和 SSE）——
+  // —— ⑥ LIMIT 注入 / 收紧（防结果集打爆内存和 SSE）——
   const limit = ast.limit as { value?: unknown } | null | undefined;
   const currentValue = Array.isArray(limit?.value) ? (limit.value[0] as { type?: string; value?: unknown } | undefined) : undefined;
 
@@ -246,7 +250,7 @@ export function guardSql(rawSql: string): GuardVerdict {
     ast.limit = buildLimit(MAX_ROWS);
   }
 
-  // —— 步骤 6：重建 SQL 文本 ——
+  // —— ⑦ 重建 SQL 文本 ——
   try {
     const finalSql = new Parser().sqlify(ast as unknown as AST);
     return { ok: true, sql: finalSql };

@@ -1,11 +1,11 @@
 /**
- * 步骤 8「结果体检」的纯分析（从 loop.ts 抽出）。
+ * C1「结果体检」的纯分析（从 loop.ts 抽出）。
  *
  * 职责边界：只**分析**结果并回传事实（checks / 归因 / 该不该 warn），
  * 不做任何状态突变——finalStatus / warnSeen / verdictReasons 的写入、
  * verification 事件的 emit 全部留在调用方（loop.ts），保持状态流转集中、可读。
  *
- * 四项检查（docs/05 步骤 8）：
+ * 四项检查（docs/05 C1）：
  *  (a) 空结果：0 行 → emptyResultFlag；聚合对空集返回「一行 NULL」也算空 → warn
  *  (b) 截断嫌疑：行数 >= LIMIT 上限
  *  (c) 归因探针：空结果时逐类放宽条件跑 COUNT，定位「谁把数据滤没了」
@@ -33,7 +33,7 @@ export interface HealthOutcome {
   emptyResultFlag: boolean;
   /** 空集聚合 或 量级 fail：调用方据此设 warnSeen=true（答案降级未核验） */
   warnSeen: boolean;
-  /** 空集聚合专属：调用方据此设 warnReasoned=true（已有专属理由，步骤 9 不再补泛化理由） */
+  /** 空集聚合专属：调用方据此设 warnReasoned=true（已有专属理由，C2 不再补泛化理由） */
   warnReasoned: boolean;
   /** 需按序 push 进 verdictReasons 的人话理由 */
   reasons: string[];
@@ -55,7 +55,7 @@ export async function runHealthChecks(input: HealthInput): Promise<HealthOutcome
   let warnReasoned = false;
 
   const { success } = input;
-  // 聚合对空集返回「一行 NULL」而不是 0 行 —— 两种形态都算空（docs/05 步骤 8(b)）
+  // 聚合对空集返回「一行 NULL」而不是 0 行 —— 两种形态都算空（docs/05 C1(b)）
   const emptyAggregate = success.rows.length === 1 && success.rows[0].every((v) => v === null);
   if (success.rows.length === 0) {
     emptyResultFlag = true;

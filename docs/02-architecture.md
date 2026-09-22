@@ -82,34 +82,39 @@ Next.js 全栈最容易犯的错是「什么都塞进 Server Action」或「什�
   │
   ├─ middleware：校验 JWT cookie → IP 滑动窗口限流 → 放行
   │
-  ├─ Route Handler 建 ReadableStream，立刻推 run_started
+  ├─ Route Handler 建 ReadableStream，立刻推 run_started                        [A1]
   │
-  ├─ [不调 LLM] 时间归一：AS_OF_DATE=2026-08-31，"近30天" → 2026-08-02~08-31
-  │                        推 time_resolved 回显给用户
+  ├─ [不调 LLM] 时间归一：AS_OF_DATE=2026-08-31，"近30天" → 2026-08-02~08-31   [A2]
+  │                        推 time_resolved 回显
   │
-  ├─ [不调 LLM] 上下文装配：确定性 schema 裁剪 + 枚举值注入 + few-shot 打分
+  ├─ [不调 LLM] 上下文装配：确定性 schema 裁剪 + 枚举值注入 + few-shot 打分     [A3]
   │                        全文存入 step 表，推 context_built（只推表名）
   │
-  ├─ [LLM #1] 生成 SQL → Zod 校验 → 推 sql_generated(attempt=N)
+  ├─ [不调 LLM] 提前拒答闸门：口径歧义词典 / 时间窗整体越数据水位               [A4]
+  │                        命中 → 直达 C2 拒答 + 澄清选项，0 次模型调用
   │
-  ├─ guard 安全检查（fail-closed）── 拒绝则终止，不重试
+  ├─ [LLM #1] 生成 SQL → Zod 校验 → 推 sql_generated(attempt=N)                 [B1]
+  │                        AST 语义指纹查重：两次命中等价写法即终止震荡
+  ├─ guard 安全检查（fail-closed）── 拒绝则终止，不重试                          [B2]
   │
-  ├─ 口径 lint（fail-open）── block 违规则带缺失谓词回到生成步
+  ├─ 口径 lint（fail-open）── block 违规则带缺失谓词回到 B1                      [B3]
   │
-  ├─ EQP 代价预检（~1ms）── 缺失 JOIN 条件则拒绝并回到生成步
+  ├─ 列名静态核对（零误报纪律）── 错列则带可用列清单回 B1                        [B4]
   │
-  ├─ worker 池只读执行（主线程 5s 计时）→ 推 rows
+  ├─ EQP 代价预检（~1ms）── 缺失 JOIN 条件则拒绝并回到 B1                        [B5]
   │
-  ├─ [不调 LLM] 结果体检：空结果归因 / 形态可疑 / 数据水位 / 量级校验
+  ├─ worker 隔离只读执行（主线程 5s 计时，超时放弃等待）→ 推 rows                [B6]
   │
-  ├─ [不调 LLM] 三态判定 + 口径回执卡片（AST 机械生成，模型碰不到）
+  ├─ [不调 LLM] 结果体检：空结果归因 / 形态可疑 / 数据水位 / 量级校验            [C1]
   │
-  ├─ [LLM #2] ChartSpec + 结论文字（结论禁止出现数字断言）
+  ├─ [不调 LLM] 三态判定 + 口径回执卡片（AST 机械生成，模型碰不到）              [C2]
   │
-  └─ 批量 flush step 到 app.db，推 done（任何分支下都必发）
+  ├─ [LLM #2] ChartSpec + 结论文字（结论禁止出现数字断言）                       [C3]
+  │
+  └─ 批量 flush step 到 app.db，推 done（任何分支下都必发）                      [C4]
 ```
 
-**关键设计**：11 个步骤里只有 2 步调 LLM。时间解析、schema 装配、回执生成、结果体检全部是确定性代码 —— 这既是准确率的来源，也是评测可复现的前提。
+**关键设计**：流程分三段 4-6-4（`A1`~`C4`，编号定义见 [Agent 设计](05-agent-design.md#一主循环三段-4-6-4只有-2-步调-llm)），**14 步里只有 2 步调 LLM**。时间解析、schema 装配、四道校验关卡、结果体检、回执生成全部是确定性代码 —— 这既是准确率的来源，也是评测可复现的前提。
 
 ## 四、技术选型
 

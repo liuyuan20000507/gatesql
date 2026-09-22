@@ -1,7 +1,7 @@
 /**
  * GateSQL 的 agent 主循环（全项目核心，作者必须逐段理解并会复述）。
  *
- * 装配关系：把 2A-2F 的零件按 docs/05-agent-design.md 的 12 步串起来。
+ * 装配关系：把 2A-2F 的零件按 docs/05-agent-design.md 的三段 4-6-4 串起来。
  * 所有零件都已实现并有测试；本文件只负责「流程、预算、重试、可观测」。
  *
  * 三个面试必问的设计点，答案都在这份代码里：
@@ -156,8 +156,8 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
 
   // —— 预算（面试点 1）——
   const budgets = {
-    repairs: 2, // 口径 lint block / EQP 拒绝 共用
-    execRetries: 2, // SQL 执行报错 独立计数
+    repairs: 2, // B3 lint block / B4 列名核对 / B5 EQP 拒绝 共享
+    execRetries: 2, // B6 SQL 执行报错 独立计数
     wallClockMs: 45_000,
   };
   let llmCalls = 0;
@@ -178,7 +178,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
   let verdict: RunSummary["verdict"] = null;
   const verdictReasons: string[] = [];
   let warnSeen = false;
-  /** warnSeen 已带专属理由（空集聚合分支），步骤 9 不再补泛化理由 */
+  /** warnSeen 已带专属理由（空集聚合分支），C2 不再补泛化理由 */
   let warnReasoned = false;
   let success: { columns: string[]; rows: unknown[][] } | null = null;
   let lastSql: string | null = null;
@@ -189,6 +189,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
   const executor = new SqlExecutor(env.SHOP_DB_PATH, env.QUERY_TIMEOUT_MS);
   const trace = (step: Omit<NewStepInput, "runId">) => void stepBuffer.push(step);
 
+  // A1 建 run（run_started 事件与 runs 行在 try 之前写入，保证任何分支都有 run_id）
   deps.emit({ type: "run_started", runId, asOfDate: asOf });
   createRun(appDb, {
     id: runId,
@@ -199,7 +200,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
   });
 
   try {
-    /* ============ 步骤 1：时间归一（不调 LLM） ============ */
+    /* ============ A2：时间归一（不调 LLM） ============ */
 
     const resolution = resolveTimeRange(deps.question, asOf);
     let question = deps.question;
@@ -214,15 +215,15 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       });
     }
 
-    /* ============ 步骤 2：上下文装配（不调 LLM） ============ */
+    /* ============ A3：上下文装配（不调 LLM） ============ */
 
     const ctx = buildSchemaContext(question, env.SHOP_DB_PATH);
     // few-shot A/B 开关（FEW_SHOT，默认 off；docs/05 第四节：≤2 条、低于阈值宁可不给）
     const fewshots = env.FEW_SHOT === "on" ? retrieveFewshots(appDb, question, ctx.selectedTables) : [];
     const fewshotIds: string[] = fewshots.map((f) => f.id);
 
-    // —— 步骤 2.5：口径歧义澄清（docs/08 5A，确定性词典，零 token）——
-    // 命中则直接拒答并附澄清选项，不进生成循环：歧义题「先算再问」会交付武断数字，
+    // —— A4 提前拒答闸门 · 子检查①：口径歧义澄清（docs/08 5A，确定性词典，零 token）——
+    // 命中则直接拒答并附澄清选项，不进 B 段循环：歧义题「先算再问」会交付武断数字，
     // 正确行为是先问口径（E3/E4 考的正是这个）
     const ambiguity = findAmbiguity(question);
     if (ambiguity) {
@@ -230,9 +231,9 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       finalStatus = "ambiguous";
       verdictReasons.push(formatClarifyReason(ambiguity));
     }
-    // —— 步骤 2.6：时间窗口整体越过数据水位 → 提前拒答（6G 后续优化，0 次模型调用）——
+    // —— A4 提前拒答闸门 · 子检查②：时间窗口整体越过数据水位（6G 后续优化，0 次模型调用）——
     // 问了一个数据库里还不存在的时段：跑 LLM+探针只会得到空集归因，
-    // 在源头拒答理由更准、0 token。部分重叠的窗口照常执行（步骤 8 出水位标记）
+    // 在源头拒答理由更准、0 token。部分重叠的窗口照常执行（C1 出水位标记）
     if (!ambiguity && isBeyondWatermark(resolution, asOf)) {
       verdict = "refused";
       finalStatus = "beyond_watermark";
@@ -254,8 +255,8 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
     // 重试上下文只追加不重写：携带全部历史失败的结构化摘要
     const repairHistory: RepairRecord[] = [];
 
-    /* ============ 步骤 3~7：生成 → 检查 → 执行（唯一的重试循环） ============ */
-    // 口径歧义/水位外时间窗命中时循环体一次都不进（0 次模型调用，直达拒答）
+    /* ============ B1~B6：生成 → 四道关卡 → 执行（全项目唯一的重试循环） ============ */
+    // A4 两道子检查命中时循环体一次都不进（0 次模型调用，直达 C2 拒答）
     while (!ambiguity && verdict === null) {
       // —— 循环守卫：墙钟 / LLM 调用数 ——
       if (Date.now() - startedAt > budgets.wallClockMs) {
@@ -270,7 +271,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       const attempt = ++attempts;
       const t0 = Date.now();
 
-      // —— 步骤 3：生成 SQL（prompt 构建抽至 prompt.ts，逐字节等价以保住 cassette 键）——
+      // —— B1：生成 SQL（prompt 构建抽至 prompt.ts，逐字节等价以保住 cassette 键）——
       const fewshotText = fewshots.length > 0 ? formatFewshotExamples(fewshots) : null;
       const system = buildSqlGenSystemPrompt(ctx.card, fewshotText);
       const userParts = buildSqlGenUserParts(question, repairHistory, sameFingerprintHits >= 1);
@@ -358,7 +359,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       }
       seenFingerprints.add(fp);
 
-      // —— 步骤 4：安全（fail-closed；安全拒绝不重试，直接终止）——
+      // —— B2：安全（fail-closed；安全拒绝不重试，直接终止）——
       const guard = guardSql(sql);
       if (!guard.ok) {
         finalStatus = "UNSAFE_SQL";
@@ -367,7 +368,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         break;
       }
 
-      // —— 步骤 5：口径 lint（fail-open；block 消耗 repairs 预算）——
+      // —— B3：口径 lint（fail-open；block 消耗 repairs 预算）——
       const lintResult = lintRules(guard.sql, hints);
       deps.emit({ type: "lint_result", attempt, violations: lintResult.violations });
       trace({
@@ -396,7 +397,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         break;
       }
 
-      // —— 步骤 5.5：列名静态核对（6G②，零误报纪律：只核对带真实表前缀的引用）——
+      // —— B4：列名静态核对（6G②，零误报纪律：只核对带真实表前缀的引用）——
       // 带前缀的错列在执行前就拦下，诊断精确到「该表可用列」；无前缀/CTE 一律放行，
       // 数据库报错路径（SQL_FAILED + execRetries）保持原样兜底
       const colCheck = checkColumnReferences(guard.sql, schemaColumns);
@@ -419,7 +420,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         break;
       }
 
-      // —— 步骤 6：EQP 代价预检（与 lint 同吃 repairs 预算）——
+      // —— B5：EQP 代价预检（与 lint 同吃 repairs 预算）——
       const cost = explainCost(guard.sql, env.SHOP_DB_PATH);
       trace({ kind: "eqp", seq: attempt, startedAt: t0, endedAt: Date.now(), status: cost.ok ? "ok" : "rejected", attributes: cost.ok ? {} : { reason: cost.reason } });
       if (!cost.ok) {
@@ -433,7 +434,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         break;
       }
 
-      // —— 步骤 6.5：自检审计（A/B 开关 SELF_CHECK，默认 off；docs/08 第 4 周）——
+      // —— B3 增强：自检审计（A/B 开关 SELF_CHECK，默认 off；docs/08 第 4 周）——
       // 设计：审计员只报疑、不直接改 SQL —— 疑点走既有修复通道（repairs 预算 + 回喂重生成），
       // 架构上不多开一条「第二生成路径」。每次运行最多审计一次，预算不足时降级未核验放行。
       if (env.SELF_CHECK === "on" && !selfCheckUsed) {
@@ -475,7 +476,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
         }
       }
 
-      // —— 步骤 7：只读执行（worker 隔离 + 超时放弃，不依赖 terminate）——
+      // —— B6：只读执行（worker 隔离 + 超时放弃，不依赖 terminate）——
       lastSql = guard.sql;
       try {
         const result = await executor.execute(guard.sql);
@@ -509,7 +510,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       break; // 执行成功，离开循环
     }
 
-    /* ============ 步骤 8：结果体检（不调 LLM） ============ */
+    /* ============ C1：结果体检（不调 LLM） ============ */
     // 分析逻辑抽至 health.ts（纯函数，可单测）；状态写入与 emit 留在主函数，保持流转集中
     if (success) {
       const h = await runHealthChecks({
@@ -531,7 +532,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       });
     }
 
-    /* ============ 步骤 9：三态判定 + 回执（不调 LLM） ============ */
+    /* ============ C2：三态判定 + 回执（不调 LLM） ============ */
 
     if (!verdict) {
       if (warnSeen || finalStatus !== "ok") {
@@ -594,7 +595,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
           : undefined,
     });
 
-    /* ============ 步骤 10：图表 + 结论（LLM #2，可被预算砍掉） ============ */
+    /* ============ C3：图表 + 结论（LLM #2，可被预算砍掉） ============ */
 
     if (success && verdict !== "refused" && llmCalls < 6) {
       const { system: sys, user: content } = buildChartPrompts(ctx.card, success.columns, success.rows);
@@ -635,7 +636,7 @@ export async function runAgent(deps: RunAgentDeps): Promise<RunSummary> {
       }
     }
   } finally {
-    /* ============ 步骤 11：收尾（任何分支都到达这里） ============ */
+    /* ============ C4：收尾（任何分支都到达这里） ============ */
 
     const elapsedMs = Date.now() - startedAt;
     deps.emit({

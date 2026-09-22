@@ -4,69 +4,117 @@
 
 > **`src/lib/agent/loop.ts` 必须由作者本人手写。** 本文档给出足够清晰的**设计**，让你知道要写什么、每个决策为什么这样定 —— 但不给可直接复制的实现。理由见 [CLAUDE.md](../CLAUDE.md)。
 
-## 一、主循环：12 步，只有 2 步调 LLM
+## 一、主循环：三段 4-6-4，只有 2 步调 LLM
+
+流水线分**三段**，每段有一个不变式。段内步骤用 `A1`~`C4` 编号 —— 前缀即段名，看到编号就知道它在不在重试循环里。
 
 ```
-步骤 0  建 run，推 run_started                        [不调 LLM]
-步骤 1  确定性时间归一                                  [不调 LLM]
-步骤 2  上下文装配（schema 切片 + few-shot + 规则文本）   [不调 LLM]
-步骤 3  生成 SQL                                      [LLM #1]
-步骤 4  安全检查 guard（fail-closed）                   [不调 LLM] ★手写
-步骤 5  口径 lint（fail-open）                         [不调 LLM]
-步骤 6  EQP 代价预检                                   [不调 LLM]
-步骤 7  只读执行                                       [不调 LLM]
-步骤 8  结果体检                                       [不调 LLM]
-步骤 9  三态判定 + 口径回执                             [不调 LLM]
-步骤 10 图表与结论                                     [LLM #2，可被预算砍掉]
-步骤 11 收尾，flush trace，推 done                     [不调 LLM]
+━━━ A 段 · 预处理与提前拒答（0 次模型调用）━━━━━━━━━━━━━━━━━━━
+A1  建 run，推 run_started                              [不调 LLM]
+A2  确定性时间归一                                       [不调 LLM]
+A3  上下文装配（schema 切片 + few-shot + 规则文本）       [不调 LLM]
+A4  提前拒答闸门（口径歧义 / 时间窗越数据水位）           [不调 LLM]
+
+━━━ B 段 · 生成-校验-执行（唯一的重试循环，双预算）━━━━━━━━━━
+B1  生成 SQL                                            [LLM #1]
+B2  安全检查 guard（fail-closed，不过直接终止）           [不调 LLM] ★手写
+B3  口径 lint（fail-open，block 吃 repairs 预算）        [不调 LLM]
+B4  列名静态核对（零误报纪律，不过吃 repairs 预算）       [不调 LLM]
+B5  EQP 代价预检（不过吃 repairs 预算）                   [不调 LLM]
+B6  只读执行（worker 隔离；报错吃 execRetries 预算）      [不调 LLM]
+
+━━━ C 段 · 可信交付（0 次模型调用，仅结论调 1 次）━━━━━━━━━━
+C1  结果体检（空集归因 / 形态 / 水位 / 量级）             [不调 LLM]
+C2  三态判定 + 口径回执（AST + 实际 COUNT）              [不调 LLM]
+C3  图表与结论                                          [LLM #2，可被预算砍掉]
+C4  收尾，flush trace，推 done（任何分支必达）            [不调 LLM]
 ```
 
-**这个比例本身就是设计主张**：把能做成确定性的全部做成确定性的，只在真正需要语言理解的地方调模型。这既是准确率的来源，也是评测可复现的前提。
+**三段的划分依据是「谁有资格改变答案」**：A 段决定这题该不该花钱答；B 段是唯一能让模型反复重来的地方；C 段决定这个答案能被信任到什么程度。
+
+**「只有 2 步调模型」是这段设计的核心主张**，不是统计副产品：能做成确定性的全部做成确定性，只在真正需要语言理解的地方调模型。这既是准确率的来源、成本的下限，也是评测可复现的前提。
+
+> **注意两套坐标系**：本文的 `A1`~`C4` 是**流程步骤**；[安全设计](07-security.md) 的「第 N 层」是**纵深防御的层**。二者正交 —— guard 在 B2 步、同时是安全的第 4 层。`guard.ts` 内部还有一套它自己的检查次序（用 `①②③` 标记，见该文件），与二者都无关。
 
 ### 各步骤要点
 
-**步骤 0 · 建 run** —— 写 `runs` 行（question 原文、as_of_date、cassette 模式、预算快照），立刻推 `run_started`。此后每一步都**先推事件再干活**，保证首个事件 <800ms 到达前端。
+**A1 · 建 run** —— 写 `runs` 行（question 原文、as_of_date、cassette 模式、预算快照），立刻推 `run_started`。此后每一步都**先推事件再干活**，保证首个事件 <800ms 到达前端。
 
-**步骤 1 · 时间归一** —— 以 AS_OF_DATE（默认 = `max(orders.created_at)` = 2026-08-31，环境变量可覆盖）为唯一时钟，用 date-fns 把「上个月 / 本季度 / 近 30 天 / 去年同期 / 上半年」解析成绝对闭开区间，改写进问题文本，推 `time_resolved` 回显。解析不出就跳过，不报错。**此后 SQL 里只允许出现字面日期。**
+**A2 · 时间归一** —— 以 AS_OF_DATE（默认 = `max(orders.created_at)` = 2026-08-31，环境变量可覆盖）为唯一时钟，用 date-fns 把「上个月 / 本季度 / 近 30 天 / 去年同期 / 上半年」解析成绝对闭开区间，改写进问题文本，推 `time_resolved` 回显。解析不出就跳过，不报错。**此后 SQL 里只允许出现字面日期。**
 
 > 为什么必须在进 LLM 之前做：模型根本不知道今天是哪天，跨年和季度边界必错且错得隐蔽；数据止于 2026-08-31 而系统当前是 2026-09-11，不做这件事「近 30 天」直接返回空表。附带白拿两个好处：评测可复现（时钟固定），以及用户在执行前就能发现「它理解的上个月不是我说的那个月」。
 
-**步骤 2 · 上下文装配** —— 见下文「上下文策略」。装配结果**全文原样存进 `steps` 表**（事后复现的唯一依据），但只推表名和 few-shot id 给前端。
+**A3 · 上下文装配** —— 见下文「上下文策略」。装配结果**全文原样存进 `steps` 表**（事后复现的唯一依据），但只推表名和 few-shot id 给前端。
 
-**步骤 3 · 生成 SQL** —— 要求输出 `{ sql, citedRules[], unanswerable, unanswerableReason }`。Zod 校验前先剥 markdown 围栏、修中文全角标点、去尾逗号；Zod 失败则带着**校验错误原文**做一次 repair（计入 `maxLlmCalls`，不计入 `maxRepairs`）；再失败记 `SCHEMA_PARSE_FAILED` 走拒答。模型自报「不可答」直接进步骤 9 的拒答分支。
+**A4 · 提前拒答闸门** —— 两道确定性检查，命中任意一道就**不进 B 段循环、0 次模型调用直达 C2 拒答**。二者是同一种东西：**在花钱之前，用代码判定「这题我现在不该给数字」**。
 
-**步骤 4-7 · SQL 执行链** —— 见 [安全设计](07-security.md)。
+| 子检查 | 拦什么 | 为什么必须在模型之前 |
+|---|---|---|
+| 口径歧义词典 | 「利润率」「客单价」这类多口径词且题面未点明 | 歧义题「先算再问」会交付一个武断数字，正确行为是先问口径 |
+| 时间窗越数据水位 | 问的整个时段在数据截止日之后（如 2027 年 1 月） | 答案在 A2 结束时就已可知：跑模型 + 执行 + 空集归因只是绕路，源头拒答理由更精确 |
 
-**步骤 8 · 结果体检** —— 四项确定性检查：
+拒答理由与三态标签分开记（`ambiguous` / `beyond_watermark`），trace 里可分别归因。**边界刻意只做一半**：时间窗与水位**部分重叠**（近 30 天跨截止日）照常执行，由 C1 出「末端不完整」标记 —— 部分重叠的数据仍有价值。
+
+**B1 · 生成 SQL** —— 要求输出 `{ sql, citedRules[], unanswerable, unanswerableReason }`（JSON Schema 约束）。解析前先剥 markdown 围栏、截取首个 `{...}` 块；解析失败记 `SCHEMA_PARSE_FAILED`，**计入 `llmCalls` 但不吃 `repairs` 预算**（格式问题和口径问题无关，不该让它偷走修复次数），连续 3 次直接落拒答。模型自报 `unanswerable` 直接跳出 B 段，走 C2 的拒答分支。入口处还会去掉尾部空白与分号 —— 模型常把分号写进 SQL 字符串里，而 guard 会把带尾分号的语句判为多语句，这是正常防御，**修法在归一化而不是放宽 guard**。
+
+**B2~B6 · 四道关卡与执行** —— 安全侧细节见 [安全设计](07-security.md)，重试策略见下文第三节。B 段是**全项目唯一的重试发生地**，四个可重试的失败点（B3/B4/B5 吃 `repairs`，B6 吃 `execRetries`）在这里汇合。四道关卡**刻意不合并**，三条理由：失败策略不同（B2 fail-closed 不重试、B3 fail-open、B4/B5 吃 repairs 重试）、回喂的诊断内容不同（缺失谓词原文 / 该表可用列清单 / 代价拒绝理由）、trace 逐关留 step 类型才能给错题归因到具体哪一关。
+
+**C1 · 结果体检** —— 四项确定性检查：
 - (a) **空结果** → 启动归因探针，按「时间范围 → 枚举值过滤 → 可空列 → JOIN 条件」的启发式顺序逐个放宽，**只跑 COUNT**，最多 4 次，共用同一超时预算，定位是哪个条件把数据滤没了
 - (b) **形态可疑** → 单个 NULL / 全零 / 行数正好等于 LIMIT（说明被静默截断）/ 聚合建立在 0 行之上
 - (c) **数据水位** → 时间序列末点若落在未闭合周期则打标记，前端画虚线加「本期数据不完整」
 - (d) **量级校验** → 与不加业务过滤的控制总数对比，占比 >100% 或 <1% 时标红
 
-**步骤 9 · 三态判定 + 回执** —— 按确定性规则定态。回执卡片由 AST 谓词 + 规则表机械生成中文，**只翻译规则表枚举到的谓词形态**，翻译不了的直接让答案落「未核验」。
+**C2 · 三态判定 + 回执** —— 按确定性规则定态。回执卡片由 AST 谓词 + 规则表机械生成中文，**只翻译规则表枚举到的谓词形态**，翻译不了的直接让答案落「未核验」。
 
 > 回执本质是一个小型的 SQL→中文编译器。必须严格限定范围 —— 按通用编译器的野心去写会从两天变成两周。
 
-**步骤 10 · 图表与结论** —— 一次调用同时产出 ChartSpec 和结论文字，**硬性要求结论不得出现任何数字断言**（数字全部来自回执和表格，模型只做定性解读）。
+**C3 · 图表与结论** —— 一次调用同时产出 ChartSpec 和结论文字，**硬性要求结论不得出现任何数字断言**（数字全部来自回执和表格，模型只做定性解读）。
 
-**步骤 11 · 收尾** —— 批量 flush，推 `done`。`done` 在任何分支下都必发。客户端 abort 时取消 LLM fetch、放弃 worker、标记 aborted 后**仍写 done**。
+**C4 · 收尾** —— 批量 flush，推 `done`。`done` 在任何分支下都必发。客户端 abort 时取消 LLM fetch、放弃 worker、标记 aborted 后**仍写 done**。
 
-## 二、工具清单
+> **一处已从编号里移除的东西**：`SELF_CHECK`（自检审计员）曾在流程里占一个「步骤 6.5」，它是第 4 周的 A/B 实验项，**实测零增益、默认关闭**，不配占正式步骤号。现在它是 B3 的一个可选增强（走同一套 repairs 预算与回喂通道，架构上不多开第二条生成路径），代码保留在 `loop.ts`，开关是 `SELF_CHECK=on`。
 
-| 工具 | 签名 | 性质 |
-|---|---|---|
-| `resolveTimeRange` | `(question, asOfDate) → {改写后问题, 绝对区间, 命中表达}` | 确定性 |
-| `buildSchemaContext` | `(question) → {schema 卡片文本, 选中的表}` | 确定性 |
-| `retrieveFewshots` | `(question, 选中的表) → 0-2 条纠正样本` | 确定性打分，可整体开关做 A/B |
-| `generateSql` | `(上下文, 失败历史) → {sql, citedRules, 不可答标记}` | **LLM** |
-| `guardSql` | `(sql) → 通过 \| 拒绝(规则 id, 被拦片段)` | ★手写，fail-closed |
-| `lintGateSQL` | `(sql) → {violations: [{ruleId, level, 缺失谓词, 修复建议}]}` | fail-open |
-| `explainCost` | `(sql) → 通过 \| 拒绝(理由)` | 确定性 |
-| `executeSql` | `(sql) → {columns, rows, 截断标记, 耗时}` | worker 池 |
-| `probeEmptyResult` | `(sql) → {嫌疑条件, 放宽后 COUNT}` | 只跑 COUNT |
-| `buildReceipt` | `(ast, 规则表, 执行统计) → 中文回执卡片` | **模型不可见** |
-| `proposeChartAndSummary` | `(问题, 列, 行样本, 回执) → {chartSpec, 结论}` | **LLM** |
-| `normalizeFingerprint` | `(sql) → hash` | AST 规范化后哈希 |
+### 旧编号对照（9/22 之前的文档、roadmap、ADR 里的编号按此映射）
+
+历史条目**不做追溯改写**（那些勾选和 ADR 是当时的事实记录），新写的内容一律用新编号。
+
+| 旧 | 新 | | 旧 | 新 |
+|---|---|---|---|---|
+| 步骤 0 | A1 | | 步骤 5.5 | B4 |
+| 步骤 1 | A2 | | 步骤 6 | B5 |
+| 步骤 2 | A3 | | 步骤 6.5 | （移出编号，归 B3 增强） |
+| 步骤 2.5 | A4 第一道子检查 | | 步骤 7 | B6 |
+| 步骤 2.6 | A4 第二道子检查 | | 步骤 8 | C1 |
+| 步骤 3 | B1 | | 步骤 9 | C2 |
+| 步骤 4 | B2 | | 步骤 10 | C3 |
+| 步骤 5 | B3 | | 步骤 11 | C4 |
+
+## 二、工具清单（名称与真实导出一致，可按名索源）
+
+| 步骤 | 函数 | 签名 | 性质 | 文件 |
+|---|---|---|---|---|
+| A2 | `resolveTimeRange` | `(question, asOf) → {改写后问题, 绝对区间, 命中表达} \| null` | 确定性 | `agent/time.ts` |
+| A4 | `findAmbiguity` | `(question) → 词条(含澄清选项) \| null` | 确定性词典 | `agent/clarify.ts` |
+| A4 | `isBeyondWatermark` | `(resolution, asOf) → boolean` | 确定性 | `agent/time.ts` |
+| A3 | `buildSchemaContext` | `(question, dbPath) → {card, selectedTables}` | 确定性 | `agent/schema-context.ts` |
+| A3 | `retrieveFewshots` | `(appDb, question, 选中的表) → 0-2 条纠正样本` | 确定性打分，可整体开关做 A/B | `agent/fewshot.ts` |
+| B1 | `buildSqlGenSystemPrompt` / `buildSqlGenUserParts` | 上下文 + 失败历史 → prompt | 纯函数（cassette 键稳定性要求逐字节稳定） | `agent/prompt.ts` |
+| B1/C3 | `callLlm` | `(messages, {jsonSchema}) → {text, tokens}` | **唯一模型出入口**（live/replay/record + 预算降级） | `agent/llm.ts` |
+| B2 | `guardSql` | `(sql) → {ok, sql} \| {ok:false, reason, detail}` | ★手写，fail-**closed** | `sql/guard.ts` |
+| B2/B6 | `openReadOnlyConnection` | `(dbPath) → DatabaseSync` | 只读 + `setAuthorizer` | `sql/guard.ts` |
+| B3 | `lintRules` | `(sql, hints) → {violations:[{ruleId, level, missingPredicate}], parseFailed}` | fail-**open** | `sql/lint.ts` |
+| B4 | `checkColumnReferences` | `(sql, schemaColumns) → {ok, detail}` | 零误报纪律，读不到 schema 整层静默 | `sql/schema-check.ts` |
+| B5 | `explainCost` | `(sql, dbPath) → {ok} \| {ok:false, reason}` | 确定性，1ms | `sql/explain.ts` |
+| B6 | `SqlExecutor.execute` | `(sql) → {columns, rows, rowCount, elapsedMs}` | worker 隔离 + 超时 | `sql/executor.ts` |
+| C1 | `runHealthChecks` | `(input) → {checks, emptyReason, warnSeen, reasons}` | 纯分析，状态突变留在 loop | `agent/health.ts` |
+| C1 | `buildEmptyResultProbes` / `splitWhere` | `(sql) → 逐个放宽的 COUNT 探针` | 只跑 COUNT | `sql/probe.ts` |
+| C1 | `checkMagnitude` / `buildControlQuery` | `(sql, resultValue) → pass\|fail\|skip` | 控制查询逻辑单一事实源（回执复用） | `sql/magnitude.ts` |
+| C1 | `detectIncompletePeriod` | `(resolution, asOf) → 水位标记` | 确定性 | `agent/period.ts` |
+| C2 | `buildReceipt` | `({resolution, sql, asOf, dbPath, resultValue}) → 中文回执卡片` | **模型不可见** | `sql/receipt.ts` |
+| B1 后 | `semanticFingerprint` | `(sql) → "sem:"+sha1 \| "txt:"+sha1` | AST 归一后哈希，解析失败退回文本 | `sql/fingerprint.ts` |
+
+`loop.ts` 只负责**编排、预算、重试、可观测** —— 上表全部零件都是可单测的纯函数或独立类，这是第 7-8 周把它从 717 行降到 621 行的那次重构（`152c96b`，行为不变）的成果。
 
 ## 三、重试策略 —— 「重试 3 次」的升级版
 
@@ -74,47 +122,58 @@
 
 ### 双预算独立计数，互不借用
 
-| 预算 | 上限 | 覆盖 |
+| 预算 | 上限 | 覆盖（对应 B 段哪一关） |
 |---|---|---|
-| 口径/预检类重试 | 2 次 | lint block 违规、EQP 拒绝 |
-| 执行类重试 | 2 次 | SQL 报错、未知列 |
-| `maxLlmCalls` | 6 | 含 Zod repair 与结论调用 |
+| `repairs`（口径/预检类） | 2 次，**四处共享** | B3 lint block、B4 列名核对、B5 EQP 拒绝、B3 自检增强（默认关） |
+| `execRetries`（执行类） | 2 次 | B6 数据库真报错（含语法错、未知表/列的兜底路径） |
+| `llmCalls` | 6 | 全局硬闸，含解析重试与 C3 结论调用 |
 | `wallClockMs` | 45000 | 端到端墙钟 |
 | 单 run token 上限 | 配置 | |
 | 全局日 token 预算 | 配置 | 超限**整站降级到 replay 模式**而不是报 500 |
 
-**安全拒绝（guard）不触发重试，直接终止。** 生成层产出危险语句说明提示词失控，重试只会烧钱。
+**为什么是两个计数器而不是一个「重试 3 次」**：口径类失败（SQL 跑得起来但我不认可）和执行类失败（SQL 根本跑不起来）根因不同，混算会互相偷配额 —— 若模型连报两次语法错就把唯一预算耗光，之后它写出漏 `status='已完成'` 的 SQL 时已无预算可修，你会交付一个高估 48% 的数字。
+
+**安全拒绝（B2 guard）不触发重试，直接终止。** 生成层产出危险语句说明提示词失控，重试只会烧钱。
+
+**JSON 解析失败不吃 `repairs`**，只占 `llmCalls`（理由见 B1 要点）——格式问题和口径问题无关，不该让它偷走修复次数。
 
 ### 环路检测
 
-每次尝试的 SQL 过 `normalizeFingerprint`（AST 规范化：排序可交换谓词、剥别名与格式化，然后哈希）：
+每次生成后立刻算 `fingerprint(sql)`（AST 规范化：可交换谓词按整条序列化后排序、列引用别名归约为真实表名，然后 sha1；解析失败退回 `txt:` + 文本哈希）：
 
 ```
-新产出的指纹 ∈ 已试过的集合
-  → 不执行该 SQL
-  → 强制切换策略（把「你上次的修改等价于没改，请换一种写法，
-     例如改用子查询隔离聚合粒度」加进提示词）
-  → 若切换后再次命中同一指纹 → 立即终止，落「未核验 + 模型在两个等价写法间震荡」
+fp ∈ seenFingerprints ?
+  第 1 次命中 → sameFingerprintHits=1，不终止；下一轮 user prompt 追加
+                「你刚才的修改等价于没改（指纹相同），请换一种根本不同的写法，
+                  例如改用子查询隔离聚合粒度」
+  第 2 次命中 → 立即终止，落 unverified +「模型在多个等价错误写法间反复震荡」
+fp 加入 seenFingerprints（每轮都加，供下一轮比对）
 ```
 
-> 指纹要做到**语义等价**而非文本相等：`WHERE x=1 AND y=2` 与 `WHERE y=2 AND x=1` 应视为同一次尝试。做到什么程度算够是个真实的权衡，写进 ADR。
+**第一次命中不终止是刻意的** —— 直接掐死太粗暴，先给它一次「换策略」的机会；两次才停，说明它确实换不出来。
+
+> 指纹要做到**语义等价**而非文本相等：`WHERE x=1 AND y=2` 与 `WHERE y=2 AND x=1` 应视为同一次尝试。归一到什么程度算够是一个真实权衡 —— **只认两条可证明安全的等价，误杀比漏抓代价大**，见 [ADR-016](09-decisions.md#adr-016--环路检测指纹语义归一边界)。
 >
 > 顺带的好处：这个指纹就是结果缓存的天然 key。
 
-### 失败六分类，走六条不同的修复路径
+### 失败六分类，分流到不同的预算与修复通道
 
-| 失败类型 | 修复提示词要点 | 重试 |
-|---|---|---|
-| `RULE_VIOLATION` | 给出缺失的具体谓词，要求**最小改动** | 是（口径预算） |
-| `SQL_FAILED` | 给数据库报错原文 | 是（执行预算） |
-| `EMPTY_RESULT` | 提示检查筛选条件与枚举值拼写 | **只给一次机会**，失败即如实告知「查询无结果，可能是筛选条件过严」而不是伪造答案 |
-| `TIMEOUT` / `COST_REJECTED` | 要求缩小范围或补 JOIN 条件 | 是 |
-| `UNSAFE_SQL` | —— | **否** |
-| `SCHEMA_PARSE_FAILED` | 给 Zod 校验错误原文 | 一次 repair 后否 |
+| 失败类型（`RepairRecord.kind`） | 谁产生 | 修复提示词要点 | 吃哪个预算 |
+|---|---|---|---|
+| `SCHEMA_PARSE_FAILED` | B1 JSON 无法解析 | 「模型输出的 JSON 无法解析或无 sql 字段」 | **不吃**（只占 `llmCalls`，连 3 次落拒答） |
+| `RULE_VIOLATION` | B3 lint block | **给出缺失的具体谓词原文**，要求最小改动 | `repairs` |
+| `COLUMN_UNKNOWN` | B4 列名核对 | 该表**可用列清单**（比数据库报错更精确） | `repairs` |
+| `COST_REJECTED` | B5 EQP | 代价拒绝理由（疑似缺失 JOIN 条件） | `repairs` |
+| `SELF_CHECK_FINDING` | B3 自检增强（默认关） | 审计员指出的具体疑点 | `repairs` |
+| `SQL_FAILED` | B6 执行抛错 | 数据库**报错原文** | `execRetries` |
+
+> **三类「结局」不在上表里，因为它们不是修复路径**：`UNSAFE_SQL`（B2 拦下即终止）、`TIMEOUT` / `EMPTY_RESULT`（B6 超时、C1 判定）走的是**终止或降级**，不回喂重试。
+>
+> 早期设计曾把 `EMPTY_RESULT` 列为「只给一次机会重试」，**实现时改掉了**：空结果可能意味着 SQL 完全正确只是确实没数据，当失败处理会白烧预算。现在它归 C1 体检 —— 按「时间→状态→可空列→全部」逐个放宽跑 COUNT 做归因，然后如实降级未核验。**这是文档落后于实现的一处，已按代码修正。**
 
 ### 重试上下文只追加不重写
 
-第 N 次重试时携带全部历史失败记录的**结构化摘要**（第 i 次的指纹前 8 位 + 失败类型 + 具体缺失谓词/错误原文），**不重复贴 schema 卡片全文** —— 否则每次重试都重付一遍 schema 的 token。
+第 N 次重试时，user 部分追加全部历史失败的**结构化摘要**（实际格式：`- 第 1 次：RULE_VIOLATION —— orders.status = '已完成'`，逐条列出），**不重复贴 schema 卡片全文** —— 卡片在 system 里已经给了，每轮重贴就是每次重付一遍 schema 的 token。这条纪律有单测锁死（`prompt.test.ts` 断言重试上下文 `not.toContain("表结构")`）。
 
 不带历史会让模型反复犯同一个错，这是新手最常见的重试实现 bug。
 
@@ -190,7 +249,7 @@ OpenTelemetry、Jaeger、独立 worker 进程与跨进程 trace 传播、事件�
 
 | 手段 | 效果 |
 |---|---|
-| 11 步里只有 2 步调 LLM | 从根上少花钱 |
+| 14 步里只有 2 步调 LLM | 从根上少花钱 |
 | 报表固化 | 重跑走存下的 SQL，零 token、约 200ms |
 | LLM 磁盘缓存（按提示词+模型+参数哈希） | 改的不是提示词时重跑评测近乎免费 |
 | cassette replay | 全量 30 题离线跑完 <60 秒、零成本 |

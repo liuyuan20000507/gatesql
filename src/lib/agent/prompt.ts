@@ -16,7 +16,7 @@ export interface RepairRecord {
 }
 
 /**
- * 步骤 3（SQL 生成）的 system prompt。
+ * B1（SQL 生成）的 system prompt。
  * fewshotText 传 null（FEW_SHOT=off）时，数组元素与无 few-shot 时代逐字节一致
  * → 既有 cassette 全部命中，OFF 路径零成本零破坏。
  */
@@ -50,7 +50,7 @@ export function buildSqlGenSystemPrompt(card: string, fewshotText: string | null
 }
 
 /**
- * 步骤 6.5 自检审计的 system+user（SELF_CHECK=on 才调用）。审计员只报疑不改 SQL，
+ * B3 增强 · 自检审计的 system+user（SELF_CHECK=on 才调用）。审计员只报疑不改 SQL，
  * 疑点走既有 repairs 通道回喂重生成——不多开「第二生成路径」。
  */
 export function buildSelfCheckPrompts(
@@ -69,7 +69,7 @@ export function buildSelfCheckPrompts(
 }
 
 /**
- * 步骤 10 图表+结论的 system+user（LLM #2，结论禁数字是硬性纪律——
+ * C3 图表+结论的 system+user（LLM #2，结论禁数字是硬性纪律——
  * 数字只来自表格与回执，模型只做定性解读）。content 只喂前 50 行（上下文有界）。
  */
 export function buildChartPrompts(
@@ -94,7 +94,7 @@ export function buildChartPrompts(
 }
 
 /**
- * 步骤 3 的 user 部分。重试上下文只追加不重写：
+ * B1 的 user 部分。重试上下文只追加不重写：
  * 携带全部历史失败的结构化摘要（不重复贴 schema 卡片全文），
  * 指纹命中过（sameFingerprintHits≥1）时附加「换一种根本不同的写法」警告。
  */

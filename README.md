@@ -41,26 +41,29 @@ GateSQL 把全部工程量押在一件事上：**一个看起来对的数字，�
 
 ```mermaid
 flowchart TD
-    Q[用户问题<br/>SSE 流式] --> T[步骤1 时间归一<br/>确定性时钟 asOf]
-    T --> C[步骤2 上下文装配<br/>schema 卡片+枚举值+规则文本]
-    C --> AMB{步骤2.5<br/>口径歧义?}
-    AMB -->|是| REF[拒答 + 澄清选项<br/>0 次模型调用]
-    AMB -->|否| GEN[步骤3 LLM 生成 SQL<br/>JSON Schema 约束]
-    GEN --> GU[步骤4 guard<br/>AST 白名单 fail-closed]
-    GU --> LI[步骤5 lint<br/>口径 R1-R8]
-    LI -->|block 违规<br/>缺谓词回喂| GEN
-    LI --> EQ[步骤6 EQP 代价预检<br/>拒笛卡尔积]
-    EQ --> EX[步骤7 只读执行<br/>worker 隔离 + 超时]
-    EX --> HC[步骤8 结果体检<br/>空集/归因/截断/水位/量级]
-    HC --> V[步骤9 三态判定 + 口径回执<br/>AST+COUNT，模型不可见]
-    V --> CH[步骤10 图表+结论<br/>结论禁数字]
-    V --> O[前端: 表格/回执/三态徽章/CSV]
-    EX --> DB[(shop.db<br/>只读连接 + setAuthorizer)]
-    GEN -.指纹震荡检测.-> GEN
-    CH --> END[步骤11 done 收尾<br/>trace 落库可回放]
+    Q[用户问题<br/>SSE 流式] --> A2[A2 时间归一<br/>确定性时钟 asOf]
+    A2 --> A3[A3 上下文装配<br/>schema卡片+枚举值+规则文本]
+    A3 --> A4{A4 提前拒答闸门<br/>口径歧义 / 时间窗越水位}
+    A4 -->|命中| REF[拒答 + 澄清选项<br/>0 次模型调用]
+    A4 -->|放行| B1[B1 LLM 生成 SQL<br/>JSON Schema 约束]
+    B1 --> B2[B2 guard 安全<br/>AST 白名单 fail-closed]
+    B2 --> B3[B3 lint 口径 R1-R8]
+    B3 -->|block 违规<br/>缺谓词回喂| B1
+    B3 --> B4[B4 列名静态核对<br/>零误报纪律]
+    B4 -->|错列回喂可用列清单| B1
+    B4 --> B5[B5 EQP 代价预检<br/>拒笛卡尔积]
+    B5 --> B6[B6 只读执行<br/>worker 隔离 + 超时]
+    B6 --> C1[C1 结果体检<br/>空集/归因/截断/水位/量级]
+    C1 --> C2[C2 三态判定 + 口径回执<br/>AST+COUNT，模型不可见]
+    C2 --> C3[C3 图表+结论<br/>结论禁数字]
+    C2 --> O[前端: 表格/回执/三态徽章/CSV]
+    B6 --> DB[(shop.db<br/>只读连接 + setAuthorizer)]
+    B1 -.指纹震荡检测.-> B1
+    C3 --> C4[C4 done 收尾<br/>trace 落库可回放]
+    REF --> C2
 ```
 
-单一进程、双 SQLite 库：`shop.db`（业务数据，agent 只读 + 引擎级授权）与 `app.db`（trace / 报表 / 评测，物理隔离，agent 根本看不见）。完整设计见 [架构设计](docs/02-architecture.md) 与 [Agent 设计](docs/05-agent-design.md)。
+单一进程、双 SQLite 库：`shop.db`（业务数据，agent 只读 + 引擎级授权）与 `app.db`（trace / 报表 / 评测，物理隔离，agent 根本看不见）。流程分**三段 4-6-4**：A 段预处理与提前拒答（0 次模型）、B 段生成-校验-执行（唯一的重试循环，双预算）、C 段可信交付 —— **全流程只有 2 次模型调用**（B1 生成、C3 结论）。完整设计见 [架构设计](docs/02-architecture.md) 与 [Agent 设计](docs/05-agent-design.md)。
 
 ## 快速开始
 
